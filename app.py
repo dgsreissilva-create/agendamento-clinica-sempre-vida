@@ -1,7 +1,7 @@
 import streamlit as st
-from supabase import create_client
 import pandas as pd
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, time # <--- O segredo está aqui
+from supabase import create_client
 
 # --- CONFIGURAÇÃO DE CONEXÃO ---
 URL_S = "https://mxsuvjgwpqzhaqbzrvdq.supabase.co"
@@ -58,47 +58,63 @@ if menu == "1. Cadastro de Médicos":
                 st.warning("Por favor, insira o nome do médico.")
 
 # --- TELA 2: ABERTURA DE AGENDA (INTERVALOS) ---
-
-# --- TELA 2: ABERTURA DE AGENDA ---
+# --- TELA 2: ABERTURA DE AGENDA (CÓDIGO COMPLETO) ---
 elif menu == "2. Abertura de Agenda":
     st.header("🏪 Abertura de Agenda Médica")
     
-    # 1. Busca a lista de médicos cadastrados
-    res_medicos = supabase.table("MEDICOS").select("id, nome, especialidade, unidade").execute()
-    
-    if res_medicos.data:
-        # Cria um dicionário para o selectbox exibir o nome mas guardar o ID
-        dict_medicos = {f"{m['nome']} ({m['especialidade']} - {m['unidade']})": m['id'] for m in res_medicos.data}
-        nome_selecionado = st.selectbox("Selecione o Médico para abrir agenda:", list(dict_medicos.keys()))
-        id_medico_escolhido = dict_medicos[nome_selecionado]
+    try:
+        # 1. Busca médicos cadastrados no banco
+        res_medicos = supabase.table("MEDICOS").select("*").execute()
+        
+        if res_medicos.data and len(res_medicos.data) > 0:
+            # Cria a lista de médicos para seleção
+            opcoes_medicos = {f"{m['nome']} ({m['especialidade']})": m['id'] for m in res_medicos.data}
+            selecao = st.selectbox("Selecione o Médico para gerar os horários:", list(opcoes_medicos.keys()))
+            id_medico_vinc = opcoes_medicos[selecao]
 
-        col1, col2, col3 = st.columns(3)
-        data_atend = col1.date_input("Data", format="DD/MM/YYYY")
-        hora_inicio = col2.time_input("Início", value=time(8, 0))
-        total_vagas = col3.number_input("Qtd de Consultas", min_value=1, max_value=40, value=10)
-        intervalo = st.slider("Intervalo entre consultas (minutos)", 10, 60, 20)
+            st.divider()
+            
+            # 2. Configuração dos horários
+            col1, col2 = st.columns(2)
+            data_agenda = col1.date_input("Qual o dia do atendimento?", format="DD/MM/YYYY")
+            # Usa o time(8, 0) que agora está importado corretamente
+            hora_inicio = col2.time_input("Horário da primeira consulta", value=time(8, 0)) 
+            
+            col3, col4 = st.columns(2)
+            qtd_vagas = col3.number_input("Quantas consultas serão realizadas?", min_value=1, max_value=50, value=10)
+            tempo_min = col4.number_input("Tempo de cada consulta (minutos)", min_value=5, max_value=120, value=20)
 
-        if st.button("Gerar Grade de Horários"):
-            vagas = []
-            # Combina a data escolhida com a hora de início
-            ponto_partida = datetime.combine(data_atend, hora_inicio)
-            
-            for i in range(total_vagas):
-                horario_vaga = ponto_partida + timedelta(minutes=i * intervalo)
-                vagas.append({
-                    "medico_id": id_medico_escolhido, # AQUI ESTÁ O VÍNCULO!
-                    "data_hora": horario_vaga.isoformat(),
-                    "status": "Livre"
-                })
-            
-            try:
-                supabase.table("CONSULTAS").insert(vagas).execute()
-                st.success(f"✅ Agenda gerada com sucesso para {nome_selecionado}!")
+            st.divider()
+
+            # 3. Botão de Processamento
+            if st.button("Gerar Grade de Horários e Salvar"):
+                novas_vagas = []
+                # Ponto de partida: data + hora inicial escolhida
+                momento_atual = datetime.combine(data_agenda, hora_inicio)
+                
+                for i in range(int(qtd_vagas)):
+                    # Calcula o horário de cada vaga somando o intervalo
+                    horario_vaga = momento_atual + timedelta(minutes=i * int(tempo_min))
+                    
+                    # Monta o registro com o médico vinculado corretamente
+                    novas_vagas.append({
+                        "medico_id": id_medico_vinc, # Vínculo fundamental para a Tela 3
+                        "data_hora": horario_vaga.isoformat(),
+                        "status": "Livre"
+                    })
+                
+                # Insere no Supabase
+                supabase.table("CONSULTAS").insert(novas_vagas).execute()
+                
+                st.success(f"✅ Sucesso! Foram gerados {qtd_vagas} horários para {selecao}.")
                 st.balloons()
-            except Exception as e:
-                st.error(f"Erro ao salvar agenda: {e}")
-    else:
-        st.warning("⚠️ Nenhum médico cadastrado. Cadastre um médico na Tela 1 primeiro.")
+        else:
+            st.warning("⚠️ Nenhum médico cadastrado no sistema. Vá até a Tela 1 para cadastrar.")
+            
+    except Exception as e:
+        st.error(f"Erro ao carregar os dados: {e}")
+        st.info("Dica: Verifique se você adicionou 'from datetime import time' no topo do código.")
+
 
 # --- TELA 3: MARCAÇÃO DE CONSULTA (PÚBLICA) ---
 
