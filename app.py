@@ -16,7 +16,8 @@ menu = st.sidebar.radio("Navegação", [
     "1. Cadastro de Médicos", 
     "2. Abertura de Agenda", 
     "3. Marcar Consulta",
-    "4. Relatório de Agendamentos"
+    "4. Relatório de Agendamentos",
+    "5. Cancelar Consulta"  # <--- ADICIONE ESTA LINHA AQUI
 ])
 
 # --- TELA 1: CADASTRO DE MÉDICOS ---
