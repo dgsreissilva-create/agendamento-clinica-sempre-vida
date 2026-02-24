@@ -5,7 +5,7 @@ from datetime import datetime, timedelta
 
 # --- CONFIGURAÇÃO DE CONEXÃO ---
 URL_S = "https://mxsuvjgwpqzhaqbzrvdq.supabase.co"
-KEY_S = "sb_publishable_08qbHGfKbBb8ljAHb7ckuQ_mp161ThN"
+KEY_S = "sb_publishable_O8qbHGfKbBb8ljAHb7ckuQ_mp16IThN"
 supabase = create_client(URL_S, KEY_S)
 
 st.set_page_config(page_title="Gestão Sempre Vida", layout="wide", page_icon="🏥")
