@@ -58,44 +58,47 @@ if menu == "1. Cadastro de Médicos":
                 st.warning("Por favor, insira o nome do médico.")
 
 # --- TELA 2: ABERTURA DE AGENDA (INTERVALOS) ---
-elif menu == "2. Abrir Agenda":
-    st.header("⏳ Abertura de Agenda por Intervalos")
-    
-    # Busca médicos e trata possíveis erros de conexão ou tabela vazia
-    try:
-        medicos_res = supabase.table("MEDICOS").select("*").execute()
-        
-        # Correção da lógica para evitar erro na linha 55:
-        if medicos_res.data and len(medicos_res.data) > 0:
-            lista_medicos = {m['nome']: m['id'] for m in medicos_res.data}
-            med_escolhido = st.selectbox("Selecione o Médico", list(lista_medicos.keys()))
-            
-            col1, col2 = st.columns(2)
-            data_atend = col1.date_input("Data do Atendimento", format="DD/MM/YYYY")
-            hora_inicio = col1.time_input("Horário de Início")
-            intervalo = col2.number_input("Duração de cada consulta (minutos)", value=20)
-            total_horas = col2.slider("Total de horas de trabalho", 1, 10, 4)
 
-            if st.button("Gerar Grade de Horários"):
-                inicio_dt = datetime.combine(data_atend, hora_inicio)
-                vagas = []
-                # Gera as vagas com base no intervalo escolhido
-                for i in range(0, int(total_horas * 60), int(intervalo)):
-                    vaga_hora = inicio_dt + timedelta(minutes=i)
-                    vagas.append({
-                        "medico_id": lista_medicos[med_escolhido],
-                        "data_hora": vaga_hora.isoformat(),
-                        "status": "Livre"
-                    })
-                
-                supabase.table("CONSULTAS").insert(vagas).execute()
-                st.success(f"Agenda gerada com sucesso para {med_escolhido}!")
-        else:
-            st.info("⚠️ Nenhum médico encontrado. Cadastre um médico na Tela 1 antes de abrir a agenda.")
+# --- TELA 2: ABERTURA DE AGENDA ---
+elif menu == "2. Abertura de Agenda":
+    st.header("🏪 Abertura de Agenda Médica")
+    
+    # 1. Busca a lista de médicos cadastrados
+    res_medicos = supabase.table("MEDICOS").select("id, nome, especialidade, unidade").execute()
+    
+    if res_medicos.data:
+        # Cria um dicionário para o selectbox exibir o nome mas guardar o ID
+        dict_medicos = {f"{m['nome']} ({m['especialidade']} - {m['unidade']})": m['id'] for m in res_medicos.data}
+        nome_selecionado = st.selectbox("Selecione o Médico para abrir agenda:", list(dict_medicos.keys()))
+        id_medico_escolhido = dict_medicos[nome_selecionado]
+
+        col1, col2, col3 = st.columns(3)
+        data_atend = col1.date_input("Data", format="DD/MM/YYYY")
+        hora_inicio = col2.time_input("Início", value=time(8, 0))
+        total_vagas = col3.number_input("Qtd de Consultas", min_value=1, max_value=40, value=10)
+        intervalo = st.slider("Intervalo entre consultas (minutos)", 10, 60, 20)
+
+        if st.button("Gerar Grade de Horários"):
+            vagas = []
+            # Combina a data escolhida com a hora de início
+            ponto_partida = datetime.combine(data_atend, hora_inicio)
             
-    except Exception as e:
-        st.error(f"Erro ao acessar o banco de dados: {e}")
-        
+            for i in range(total_vagas):
+                horario_vaga = ponto_partida + timedelta(minutes=i * intervalo)
+                vagas.append({
+                    "medico_id": id_medico_escolhido, # AQUI ESTÁ O VÍNCULO!
+                    "data_hora": horario_vaga.isoformat(),
+                    "status": "Livre"
+                })
+            
+            try:
+                supabase.table("CONSULTAS").insert(vagas).execute()
+                st.success(f"✅ Agenda gerada com sucesso para {nome_selecionado}!")
+                st.balloons()
+            except Exception as e:
+                st.error(f"Erro ao salvar agenda: {e}")
+    else:
+        st.warning("⚠️ Nenhum médico cadastrado. Cadastre um médico na Tela 1 primeiro.")
 
 # --- TELA 3: MARCAÇÃO DE CONSULTA (PÚBLICA) ---
 
