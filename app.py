@@ -71,7 +71,7 @@ elif menu == "2. Abrir Agenda":
             med_escolhido = st.selectbox("Selecione o Médico", list(lista_medicos.keys()))
             
             col1, col2 = st.columns(2)
-            data_atend = col1.date_input("Data do Atendimento")
+            data_atend = col1.date_input("Data do Atendimento", format="DD/MM/YYYY")
             hora_inicio = col1.time_input("Horário de Início")
             intervalo = col2.number_input("Duração de cada consulta (minutos)", value=20)
             total_horas = col2.slider("Total de horas de trabalho", 1, 10, 4)
