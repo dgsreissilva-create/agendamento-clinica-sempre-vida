@@ -2,13 +2,12 @@ import streamlit as st
 from supabase import create_client
 import pandas as pd
 
-# O segredo é usar EXATAMENTE o que você escreveu nos Secrets
-# Se lá você escreveu SUPABASE_URL, aqui tem que ser igual
+# O código busca os nomes EXATOS que você salvou nos Secrets
 url = st.secrets["SUPABASE_URL"]
 key = st.secrets["SUPABASE_KEY"]
 supabase = create_client(url, key)
 
-st.set_page_config(page_title="Agenda Clínica Sempre Vida", layout="wide")
+st.title("🏥 Agenda Clínica Sempre Vida")
 except Exception as e:
     st.error("Erro nas chaves de conexão. Verifique os Secrets!")
     st.stop()
