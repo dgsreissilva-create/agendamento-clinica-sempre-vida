@@ -4,7 +4,7 @@ import pandas as pd
 
 # CONFIGURAÇÕES DE ACESSO DIRETO (Substitui os Secrets)
 URL_DB = "https://mxsuvjgwpqzhaqbzrvdq.supabase.co"
-KEY_DB = "sb_publishable_08qbHGfKbBb8ljAHb7ckuQ_mp161ThN"
+KEY_DB = "sb_publishable_O8qbHGfKbBb8ljAHb7ckuQ_mp16IThN"
 
 # Conexão com o Supabase
 try:
