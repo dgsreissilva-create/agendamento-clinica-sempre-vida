@@ -2,64 +2,48 @@ import streamlit as st
 from supabase import create_client
 import pandas as pd
 
-# Chaves diretas para eliminar erros de 'Secrets'
-URL_S = "https://mxsuvjgwpqzhaqbzrvdq.supabase.co"
-KEY_S = "sb_publishable_08qbHGfKbBb8ljAHb7ckuQ_mp161ThN"
+# --- CONEXÃO DIRETA (SEM SECRETS) ---
+# Colocamos os dados reais aqui para o erro desaparecer na hora
+URL_FIXA = "https://mxsuvjgwpqzhaqbzrvdq.supabase.co"
+KEY_FIXA = "sb_publishable_08qbHGfKbBb8ljAHb7ckuQ_mp161ThN"
 
-# Conexão Robusta
+# Inicializa o banco de dados
 try:
-    supabase = create_client(URL_S, KEY_S)
+    supabase = create_client(URL_FIXA, KEY_FIXA)
 except Exception as e:
-    st.error(f"Erro na conexão com o banco: {e}")
+    st.error(f"Erro ao conectar: {e}")
 
-# Configuração da Página
+# --- INTERFACE ---
 st.set_page_config(page_title="Clínica Sempre Vida", layout="wide")
+st.title("🏥 Sistema de Agenda Clínica")
 
-# Menu Lateral
-st.sidebar.title("🏥 Gestão Clínica")
-opcao = st.sidebar.radio("Navegar:", ["Cadastrar Paciente", "Agenda de Clientes"])
+menu = st.sidebar.radio("Navegação", ["Cadastrar Paciente", "Ver Agenda"])
 
-# --- CADASTRO ---
-if opcao == "Cadastrar Paciente":
-    st.header("📋 Cadastro de Novo Paciente")
-    
-    with st.form("meu_formulario", clear_on_submit=True):
-        col1, col2 = st.columns(2)
-        with col1:
-            nome = st.text_input("Nome Completo")
-            whats = st.text_input("WhatsApp / Telefone")
-        with col2:
-            plano = st.text_input("Convênio / Plano")
+if menu == "Cadastrar Paciente":
+    st.subheader("Novo Cadastro")
+    with st.form("form_clinica", clear_on_submit=True):
+        nome = st.text_input("Nome Completo")
+        whatsapp = st.text_input("WhatsApp")
+        convenio = st.text_input("Convênio")
         
-        enviar = st.form_submit_button("Salvar Paciente")
-        
-        if enviar:
+        if st.form_submit_button("Salvar Paciente"):
             if nome:
-                try:
-                    # O nome das chaves aqui DEVE ser igual ao do SQL
-                    supabase.table("PACIENTES").insert({
-                        "nome_completo": nome,
-                        "telefone": whats,
-                        "convenio": plano
-                    }).execute()
-                    st.success(f"✨ {nome} cadastrado com sucesso!")
-                except Exception as error:
-                    st.error(f"Erro ao salvar: {error}")
+                # Envia os dados para a tabela PACIENTES
+                supabase.table("PACIENTES").insert({
+                    "nome_completo": nome,
+                    "telefone": whatsapp,
+                    "convenio": convenio
+                }).execute()
+                st.success(f"✅ {nome} salvo com sucesso!")
             else:
-                st.warning("⚠️ O campo 'Nome' é obrigatório.")
+                st.warning("O nome é obrigatório.")
 
-# --- AGENDA ---
-elif opcao == "Agenda de Clientes":
-    st.header("📅 Pacientes Cadastrados")
-    
-    try:
-        dados = supabase.table("PACIENTES").select("*").execute()
-        if dados.data:
-            df = pd.DataFrame(dados.data)
-            # Seleciona apenas as colunas importantes para exibir
-            colunas_exibir = ["nome_completo", "telefone", "convenio"]
-            st.dataframe(df[colunas_exibir], use_container_width=True)
-        else:
-            st.info("Nenhum registro encontrado no banco.")
-    except Exception as e:
-        st.error(f"Erro ao carregar a agenda: {e}")
+elif menu == "Ver Agenda":
+    st.subheader("Pacientes Agendados")
+    res = supabase.table("PACIENTES").select("*").execute()
+    if res.data:
+        df = pd.DataFrame(res.data)
+        # Mostra apenas as colunas principais
+        st.dataframe(df[['nome_completo', 'telefone', 'convenio']], use_container_width=True)
+    else:
+        st.info("Nenhum paciente cadastrado.")
