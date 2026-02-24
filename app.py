@@ -58,7 +58,8 @@ if menu == "1. Cadastro de Médicos":
                 st.warning("Por favor, insira o nome do médico.")
 
 # --- TELA 2: ABERTURA DE AGENDA (INTERVALOS) ---
-# --- TELA 2: ABERTURA DE AGENDA (CÓDIGO COMPLETO) ---
+
+[12:04, 24/02/2026] Douglas: # --- TELA 2: ABERTURA DE AGENDA (CÓDIGO COMPLETO) ---
 elif menu == "2. Abertura de Agenda":
     st.header("🏪 Abertura de Agenda Médica")
     
@@ -114,7 +115,59 @@ elif menu == "2. Abertura de Agenda":
     except Exception as e:
         st.error(f"Erro ao carregar os dados: {e}")
         st.info("Dica: Verifique se você adicionou 'from datetime import time' no topo do código.")
+[12:07, 24/02/2026] Douglas: # --- TELA 2: ABERTURA DE AGENDA (VERSÃO BLINDADA) ---
+elif menu == "2. Abertura de Agenda":
+    st.header("🏪 Abertura de Agenda Médica")
+    
+    # Busca médicos no banco para garantir que a conexão está ativa
+    try:
+        res_med = supabase.table("MEDICOS").select("*").execute()
+        
+        if res_med.data:
+            # Criando a lista de médicos de forma ultra-segura
+            opcoes = {}
+            for m in res_med.data:
+                label = f"{m.get('nome')} ({m.get('especialidade')})"
+                opcoes[label] = m.get('id')
+            
+            escolha = st.selectbox("Selecione o Médico:", list(opcoes.keys()))
+            id_medico_vinc = opcoes[escolha]
 
+            st.markdown("---")
+            
+            col1, col2 = st.columns(2)
+            data_age = col1.date_input("Data do Atendimento", format="DD/MM/YYYY")
+            
+            # Aqui usamos o caminho completo para evitar erro de importação
+            import datetime as dt_lib
+            hora_ini = col2.time_input("Horário de Início", value=dt_lib.time(8, 0))
+            
+            c3, c4 = st.columns(2)
+            qtd = c3.number_input("Quantidade de Vagas", min_value=1, value=10)
+            int_min = c4.number_input("Intervalo (minutos)", min_value=5, value=20)
+
+            if st.button("Gerar e Salvar Agenda"):
+                lista_vagas = []
+                # Cálculo dos horários
+                ponto_inicio = dt_lib.datetime.combine(data_age, hora_ini)
+                
+                for i in range(int(qtd)):
+                    horario_vaga = ponto_inicio + dt_lib.timedelta(minutes=i * int(int_min))
+                    lista_vagas.append({
+                        "medico_id": id_medico_vinc,
+                        "data_hora": horario_vaga.isoformat(),
+                        "status": "Livre"
+                    })
+                
+                # Envio ao banco
+                supabase.table("CONSULTAS").insert(lista_vagas).execute()
+                st.success(f"✅ Agenda gerada para {escolha}!")
+                st.balloons()
+        else:
+            st.warning("⚠️ Nenhum médico cadastrado. Vá na Tela 1.")
+            
+    except Exception as e:
+        st.error(f"Erro ao carregar tela: {e}")
 
 # --- TELA 3: MARCAÇÃO DE CONSULTA (PÚBLICA) ---
 
