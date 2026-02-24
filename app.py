@@ -1,10 +1,16 @@
 import streamlit as st
 from supabase import create_client
+import pandas as pd
 
-# O segredo é usar o mesmo nome que está no cofre (Secrets)
-url = st.secrets["https://mxsuvjgwpqzhaqbzrvdq.supabase.co"]
-key = st.secrets["sb_publishable_08qbHGfKbBb8ljAHb7ckuQ_mp161ThN"]
-supabase = create_client(url, key)
+# O código precisa buscar EXATAMENTE os nomes que você salvou nos Secrets
+try:
+    url = st.secrets["SUPABASE_URL"]
+    key = st.secrets["SUPABASE_KEY"]
+    supabase = create_client(url, key)
+except Exception as e:
+    st.error("Erro nas chaves de conexão. Verifique os Secrets!")
+    st.stop()
+
 st.title("🏥 Agenda Clínica Sempre Vida")
 
 aba = st.sidebar.radio("Navegação", ["Cadastrar Paciente", "Ver Agenda"])
