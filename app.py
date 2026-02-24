@@ -103,83 +103,88 @@ elif menu == "2. Abrir Agenda":
 elif menu == "3. Marcar Consulta":
     st.header("📅 Agendamento de Consultas")
     
-    # 1. Busca simplificada para evitar o erro de 'NoneType'
     try:
+        # Busca horários LIVRES e tenta trazer os MEDICOS vinculados
         res_vagas = supabase.table("CONSULTAS").select(", MEDICOS()").eq("status", "Livre").execute()
         
-        if res_vagas.data and len(res_vagas.data) > 0:
-            # Criamos uma lista limpa apenas com horários que têm médicos válidos
-            dados_validos = []
+        if res_vagas.data:
+            vagas_limpas = []
             for r in res_vagas.data:
-                med = r.get('MEDICOS') or r.get('medicos')
-                if med: # Só adiciona se o médico existir no banco
-                    dt_obj = pd.to_datetime(r['data_hora'])
-                    dados_validos.append({
+                # TRATAMENTO DE SEGURANÇA: Só aceita se o médico existir de fato
+                m = r.get('MEDICOS') or r.get('medicos')
+                if m and isinstance(m, dict):
+                    dt = pd.to_datetime(r['data_hora'])
+                    vagas_limpas.append({
                         'id': r['id'],
-                        'unid_nome': med.get('unidade', 'N/I'),
-                        'esp_nome': med.get('especialidade', 'N/I'),
-                        'med_nome': med.get('nome', 'N/I'),
-                        'label_final': dt_obj.strftime('%d/%m/%Y às %H:%M'),
-                        'data_ordenacao': r['data_hora']
+                        'unidade': m.get('unidade', 'N/I'),
+                        'especialidade': m.get('especialidade', 'N/I'),
+                        'medico': m.get('nome', 'N/I'),
+                        'data_br': dt.strftime('%d/%m/%Y'),
+                        'hora_br': dt.strftime('%H:%M'),
+                        'label_filtro': dt.strftime('%d/%m/%Y às %H:%M'),
+                        'sort': r['data_hora']
                     })
             
-            if dados_validos:
-                df_final = pd.DataFrame(dados_validos).sort_values(by='data_ordenacao')
+            if vagas_limpas:
+                df = pd.DataFrame(vagas_limpas).sort_values(by='sort')
 
-                st.info("👋 Selecione as opções para encontrar seu horário:")
+                st.info("👋 Selecione as opções abaixo para encontrar seu horário:")
 
-                # --- FILTROS SEQUENCIAIS ---
+                # --- FILTROS EM CASCATA ---
                 c1, c2 = st.columns(2)
                 
                 with c1:
-                    unidades_disponiveis = sorted(df_final['unid_nome'].unique())
-                    unidade_sel = st.selectbox("🏥 Escolha a Unidade", unidades_disponiveis)
-                    df_filtro = df_final[df_final['unid_nome'] == unidade_sel]
+                    # Unidade
+                    op_unidade = sorted(df['unidade'].unique())
+                    sel_unidade = st.selectbox("🏥 1. Escolha a Unidade", op_unidade)
+                    df = df[df['unidade'] == sel_unidade]
                     
-                    esps_disponiveis = sorted(df_filtro['esp_nome'].unique())
-                    especialidade_sel = st.selectbox("🩺 Escolha a Especialidade", esps_disponiveis)
+                    # Especialidade
+                    op_esp = sorted(df['especialidade'].unique())
+                    sel_esp = st.selectbox("🩺 2. Escolha a Especialidade", op_esp)
+                    df = df[df['especialidade'] == sel_esp]
 
                 with c2:
-                    df_filtro = df_filtro[df_filtro['esp_nome'] == especialidade_sel]
-                    meds_disponiveis = sorted(df_filtro['med_nome'].unique())
-                    medico_sel = st.selectbox("👨‍⚕️ Escolha o Médico", meds_disponiveis)
+                    # Médico (Aqui aparecerá a Dra. Isabelle)
+                    op_med = sorted(df['medico'].unique())
+                    sel_med = st.selectbox("👨‍⚕️ 3. Escolha o Médico", op_med)
+                    df = df[df['medico'] == sel_med]
                     
-                    df_filtro = df_filtro[df_filtro['med_nome'] == medico_sel]
-                    horario_sel = st.selectbox("⏰ Escolha o Dia e Horário", df_filtro['label_final'].tolist())
+                    # Horário
+                    sel_hora = st.selectbox("⏰ 4. Escolha o Dia e Horário", df['label_final' if 'label_final' in df else 'label_filtro'].tolist())
 
-                # Recupera o ID da vaga
-                id_vaga = df_filtro[df_filtro['label_final'] == horario_sel].iloc[0]['id']
+                # Pega o ID para salvar
+                id_final = df[df['label_filtro'] == sel_hora].iloc[0]['id']
 
                 st.markdown("---")
                 
-                # --- FORMULÁRIO ---
-                with st.form("form_agendamento_final", clear_on_submit=True):
-                    st.write(f"✅ *Doutor(a):* {medico_sel} | *Horário:* {horario_sel}")
-                    
-                    col_p1, col_p2 = st.columns(2)
-                    p_nome = col_p1.text_input("Nome")
-                    p_sobrenome = col_p1.text_input("Sobrenome")
-                    p_tel = col_p2.text_input("WhatsApp (com DDD)")
-                    p_conv = col_p2.text_input("Convênio")
+                # --- FORMULÁRIO FINAL ---
+                with st.form("form_final_ok", clear_on_submit=True):
+                    st.write(f"📝 *Confirmando:* {sel_med} | {sel_hora}")
+                    c_f1, c_f2 = st.columns(2)
+                    p_n = c_f1.text_input("Nome")
+                    p_s = c_f1.text_input("Sobrenome")
+                    p_t = c_f2.text_input("WhatsApp (com DDD)")
+                    p_c = c_f2.text_input("Convênio")
                     
                     if st.form_submit_button("FINALIZAR AGENDAMENTO"):
-                        if p_nome and p_tel:
+                        if p_n and p_t:
                             supabase.table("CONSULTAS").update({
-                                "paciente_nome": p_nome, "paciente_sobrenome": p_sobrenome,
-                                "paciente_telefone": p_tel, "paciente_convenio": p_conv,
+                                "paciente_nome": p_n, "paciente_sobrenome": p_s,
+                                "paciente_telefone": p_t, "paciente_convenio": p_c,
                                 "status": "Marcada"
-                            }).eq("id", id_vaga).execute()
-                            st.success("✨ Consulta agendada com sucesso!")
+                            }).eq("id", id_final).execute()
+                            st.success("✅ Consulta agendada com sucesso!")
                             st.balloons()
                         else:
-                            st.error("⚠️ Nome e WhatsApp são obrigatórios.")
+                            st.error("⚠️ Nome e WhatsApp são obrigatórios!")
             else:
-                st.warning("🔎 Médicos encontrados, mas sem horários livres vinculados.")
+                st.warning("🔎 Encontramos horários, mas eles não estão vinculados a nenhum médico cadastrado. Verifique a Tela 2.")
         else:
-            st.info("🔎 No momento, não há horários livres no sistema.")
+            st.info("🔎 Não há horários 'Livres' no sistema no momento.")
             
     except Exception as e:
-        st.error(f"Erro na integração: {e}")
+        st.error(f"Erro técnico: {e}")
 
 # --- TELA 4: RELATÓRIO ---
 # --- TELA 4: RELATÓRIO (CONFIRMAÇÃO DE CONSULTAS) ---
