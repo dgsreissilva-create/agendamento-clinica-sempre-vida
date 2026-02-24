@@ -10,27 +10,27 @@ supabase = create_client(url, key)
 
 st.set_page_config(page_title="Clínica Sempre Vida", layout="wide")
 
-# --- 2. LÓGICA DE LINK PÚBLICO E MENU ---
-# O Streamlit agora usa st.query_params para ler dados do URL
+# --- 2. LÓGICA DE LINK PÚBLICO (CÓDIGO REVISADO) ---
+# Tenta capturar o parâmetro 'p' da URL
 try:
-    parametros = st.query_params
-    # Verifica se o link tem o sufixo ?p=1
-    is_publico = parametros.get("p") == "1"
-except:
+    # Captura os parâmetros atuais da URL
+    params = st.query_params
+    # Se p=1 estiver na URL, entra no modo paciente
+    is_publico = params.get("p") == "1"
+except Exception:
     is_publico = False
 
 if is_publico:
-    # Se for público, define a tela de agendamento como padrão
+    # Modo Paciente: Abre direto na tela 3 e remove o menu lateral
     menu = "3. Marcar Consulta"
-    # Esconde o menu lateral para o paciente
     st.markdown("""
         <style>
-            [data-testid="stSidebar"] {display: none;}
-            section[data-testid="stSidebar"] {width: 0px;}
+            [data-testid="stSidebar"] {display: none !important;}
+            section[data-testid="stSidebar"] {width: 0px !important;}
         </style>
     """, unsafe_allow_html=True)
 else:
-    # Menu normal para administração
+    # Modo Administrativo: Menu completo
     st.sidebar.title("🏥 Gestão Clínica")
     menu = st.sidebar.radio("Navegação", [
         "1. Cadastro de Médicos", 
