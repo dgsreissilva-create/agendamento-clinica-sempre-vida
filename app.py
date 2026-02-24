@@ -193,3 +193,59 @@ elif menu == "4. Relatório de Agendamentos":
             st.dataframe(pd.DataFrame(relat), use_container_width=True)
     except Exception as e:
         st.error(f"Erro no relatório: {e}")
+
+# --- TELA 5: CANCELAMENTO DE CONSULTA ---
+elif menu == "5. Cancelar Consulta":
+    st.header("🚫 Cancelamento de Agendamentos")
+    st.markdown("---")
+    st.warning("Esta ação removerá os dados do paciente e tornará o horário disponível novamente na Tela 3.")
+
+    try:
+        # Busca apenas consultas que estão com status 'Marcada' para não listar horários vazios
+        res = supabase.table("CONSULTAS").select("*, MEDICOS(*)").eq("status", "Marcada").execute()
+        
+        if res.data and len(res.data) > 0:
+            dados_cancelar = []
+            for r in res.data:
+                m = r.get('MEDICOS') or r.get('medicos')
+                dt = pd.to_datetime(r['data_hora'])
+                
+                # Criamos uma linha amigável para o usuário identificar a consulta
+                paciente = f"{r.get('paciente_nome', '')} {r.get('paciente_sobrenome', '')}".strip()
+                medico = m.get('nome', 'N/I')
+                info = f"📅 {dt.strftime('%d/%m/%Y %H:%M')} | 👤 Paciente: {paciente} | 👨‍⚕️ Dr(a): {medico}"
+                
+                dados_cancelar.append({
+                    'id': r['id'],
+                    'info_completa': info
+                })
+            
+            df_cancelar = pd.DataFrame(dados_cancelar)
+            
+            # Campo de seleção para o administrador/paciente escolher qual consulta cancelar
+            st.subheader("Selecione o agendamento:")
+            escolha_cancelar = st.selectbox("Consultas Marcadas:", ["Selecione um agendamento..."] + df_cancelar['info_completa'].tolist())
+            
+            if escolha_cancelar != "Selecione um agendamento...":
+                id_para_cancelar = df_cancelar[df_cancelar['info_completa'] == escolha_cancelar].iloc[0]['id']
+
+                # Botão de confirmação com cor de destaque (vermelho)
+                if st.button("🔴 CONFIRMAR CANCELAMENTO DEFINITIVO"):
+                    # O código limpa os campos do paciente e volta o status para 'Livre'
+                    supabase.table("CONSULTAS").update({
+                        "paciente_nome": None,
+                        "paciente_sobrenome": None,
+                        "paciente_telefone": None,
+                        "paciente_convenio": None,
+                        "status": "Livre"
+                    }).eq("id", id_para_cancelar).execute()
+                    
+                    st.success("✨ Sucesso! O horário foi liberado e os dados do paciente foram removidos.")
+                    st.balloons()
+                    # O comando rerun faz a lista de cancelamento se atualizar na hora
+                    st.rerun()
+        else:
+            st.info("🔎 No momento, não há nenhuma consulta marcada no sistema para ser cancelada.")
+            
+    except Exception as e:
+        st.error(f"Ocorreu um erro ao processar o cancelamento: {e}")
