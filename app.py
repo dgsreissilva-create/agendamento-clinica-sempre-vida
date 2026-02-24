@@ -153,23 +153,75 @@ else:
                     supabase.table("CONSULTAS").insert(vagas).execute()
                     st.success("Agenda Aberta no Banco!")
 
-        elif menu == "4. Relatório de Agendamentos":
-            st.header("📋 Relatório")
-            res = supabase.table("CONSULTAS").select("*, MEDICOS(*)").execute()
-            if res.data:
-                relat = []
-                for r in res.data:
-                    m = r.get('MEDICOS') or r.get('medicos')
-                    dt = pd.to_datetime(r['data_hora'])
-                    relat.append({
-                        "Data/Hora": dt.strftime('%d/%m/%Y %H:%M'),
-                        "Médico": m['nome'] if m else "N/I",
-                        "Paciente": f"{r.get('paciente_nome','')} {r.get('paciente_sobrenome','')}".strip() or "-",
-                        "WhatsApp": r.get('paciente_telefone', '-'),
-                        "Status": r['status']
-                    })
-                st.dataframe(pd.DataFrame(relat), use_container_width=True)
+elif menu == "4. Relatório de Agendamentos":
+            st.header("📋 Relatório de Consultas Agendadas")
+            try:
+                # 1. Busca os dados no banco cruzando com a tabela de Médicos
+                res = supabase.table("CONSULTAS").select("*, MEDICOS(*)").execute()
+                
+                if res.data:
+                    relat_final = []
+                    # 2. Processa os dados para o formato do relatório
+                    for i, r in enumerate(res.data):
+                        m = r.get('MEDICOS') or r.get('medicos') or {}
+                        dt = pd.to_datetime(r['data_hora'])
+                        
+                        # Extração de variáveis para a mensagem
+                        data_hora_br = dt.strftime('%d/%m/%Y %H:%M')
+                        unidade = m.get('unidade', '-')
+                        medico = m.get('nome', 'N/I')
+                        especialidade = m.get('especialidade', '-')
+                        paciente_full = f"{r.get('paciente_nome', '')} {r.get('paciente_sobrenome', '')}".strip()
+                        telefone = str(r.get('paciente_telefone', ''))
+                        
+                        # 3. Construção da Mensagem Personalizada
+                        # Olá você terá uma consulta com NOME DO MÉDICO / ESPECIALIDADE / DATA / UNIDADE
+                        texto_msg = f"Olá, você terá uma consulta com {medico} / {especialidade} / {data_hora_br} / {unidade}"
+                        
+                        # Limpa o telefone para o link (mantém apenas números)
+                        tel_so_numeros = ''.join(filter(str.isdigit, telefone))
+                        
+                        # Monta o link do WhatsApp (adicionando 55 do Brasil se necessário)
+                        if tel_so_numeros:
+                            link_wa = f"https://wa.me/55{tel_so_numeros}?text={texto_msg.replace(' ', '%20')}"
+                        else:
+                            link_wa = None
+                        
+                        # 4. Adiciona à lista na ordem solicitada
+                        relat_final.append({
+                            "Nº": i + 1,
+                            "Data/Hora": data_hora_br,
+                            "Unidade": unidade,
+                            "Médico": medico,
+                            "Paciente": paciente_full if paciente_full else "Não informado",
+                            "WhatsApp": link_wa
+                        })
+                    
+                    # Converte para DataFrame
+                    df_relatorio = pd.DataFrame(relat_final)
+                    
+                    # 5. Configuração visual da tabela com link clicável
+                    st.dataframe(
+                        df_relatorio,
+                        column_config={
+                            "Nº": st.column_config.NumberColumn(width="small"),
+                            "WhatsApp": st.column_config.LinkColumn(
+                                "📱 Ação",
+                                display_text="Chamar no WhatsApp 🟢",
+                                help="Clique para enviar a mensagem de confirmação"
+                            )
+                        },
+                        use_container_width=True,
+                        hide_index=True
+                    )
+                    
+                    st.caption("ℹ️ O botão acima abre o WhatsApp com a mensagem de confirmação pronta.")
+                else:
+                    st.info("🔎 Nenhum registro de consulta encontrado no banco de dados.")
+            except Exception as e:
+                st.error(f"Erro ao processar o relatório: {e}")
 
+        
         elif menu == "5. Cancelar Consulta":
             st.header("🚫 Cancelar Agendamento")
             res = supabase.table("CONSULTAS").select("*, MEDICOS(*)").eq("status", "Marcada").execute()
