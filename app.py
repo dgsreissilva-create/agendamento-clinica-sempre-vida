@@ -60,33 +60,42 @@ if menu == "1. Cadastro de Médicos":
 # --- TELA 2: ABERTURA DE AGENDA (INTERVALOS) ---
 elif menu == "2. Abrir Agenda":
     st.header("⏳ Abertura de Agenda por Intervalos")
-    medicos_res = supabase.table("MEDICOS").select("*").execute()
     
-    if medicos_res.data:
-        lista_medicos = {m['nome']: m['id'] for m in medicos_res.data}
-        med_escolhido = st.selectbox("Selecione o Médico", list(lista_medicos.keys()))
+    # Busca médicos e trata possíveis erros de conexão ou tabela vazia
+    try:
+        medicos_res = supabase.table("MEDICOS").select("*").execute()
         
-        col1, col2 = st.columns(2)
-        data_atend = col1.date_input("Data do Atendimento")
-        hora_inicio = col1.time_input("Horário de Início")
-        intervalo = col2.number_input("Duração de cada consulta (minutos)", value=20)
-        total_horas = col2.slider("Total de horas de trabalho", 1, 10, 4)
+        # Correção da lógica para evitar erro na linha 55:
+        if medicos_res.data and len(medicos_res.data) > 0:
+            lista_medicos = {m['nome']: m['id'] for m in medicos_res.data}
+            med_escolhido = st.selectbox("Selecione o Médico", list(lista_medicos.keys()))
+            
+            col1, col2 = st.columns(2)
+            data_atend = col1.date_input("Data do Atendimento")
+            hora_inicio = col1.time_input("Horário de Início")
+            intervalo = col2.number_input("Duração de cada consulta (minutos)", value=20)
+            total_horas = col2.slider("Total de horas de trabalho", 1, 10, 4)
 
-        if st.button("Gerar Grade de Horários"):
-            inicio_dt = datetime.combine(data_atend, hora_inicio)
-            vagas = []
-            for i in range(0, int(total_horas * 60), int(intervalo)):
-                vaga_hora = inicio_dt + timedelta(minutes=i)
-                vagas.append({
-                    "medico_id": lista_medicos[med_escolhido],
-                    "data_hora": vaga_hora.isoformat(),
-                    "status": "Livre"
-                })
-            supabase.table("CONSULTAS").insert(vagas).execute()
-            st.success(f"Agenda gerada com sucesso para {med_escolhido}!")
-    else:
-        st.info("Cadastre um médico primeiro na Tela 1.")
-
+            if st.button("Gerar Grade de Horários"):
+                inicio_dt = datetime.combine(data_atend, hora_inicio)
+                vagas = []
+                # Gera as vagas com base no intervalo escolhido
+                for i in range(0, int(total_horas * 60), int(intervalo)):
+                    vaga_hora = inicio_dt + timedelta(minutes=i)
+                    vagas.append({
+                        "medico_id": lista_medicos[med_escolhido],
+                        "data_hora": vaga_hora.isoformat(),
+                        "status": "Livre"
+                    })
+                
+                supabase.table("CONSULTAS").insert(vagas).execute()
+                st.success(f"Agenda gerada com sucesso para {med_escolhido}!")
+        else:
+            st.info("⚠️ Nenhum médico encontrado. Cadastre um médico na Tela 1 antes de abrir a agenda.")
+            
+    except Exception as e:
+        st.error(f"Erro ao acessar o banco de dados: {e}")
+        
 # --- TELA 3: MARCAÇÃO DE CONSULTA ---
 elif menu == "3. Marcar Consulta":
     st.header("📅 Agendamento de Consultas")
