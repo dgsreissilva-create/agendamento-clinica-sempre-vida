@@ -96,7 +96,7 @@ elif menu == "2. Abrir Agenda":
     except Exception as e:
         st.error(f"Erro ao acessar o banco de dados: {e}")
         
-# --- TELA 3: MARCAÇÃO DE CONSULTA ---
+
 # --- TELA 3: MARCAÇÃO DE CONSULTA (PÚBLICA) ---
 
 elif menu == "3. Marcar Consulta":
@@ -152,21 +152,40 @@ elif menu == "3. Marcar Consulta":
         st.info("Não há horários livres disponíveis no momento.")
         
 # --- TELA 4: RELATÓRIO ---
+# --- TELA 4: RELATÓRIO (CONFIRMAÇÃO DE CONSULTAS) ---
 elif menu == "4. Relatório de Consultas":
     st.header("📋 Relatório Geral (Ordem Cronológica)")
-    res_relatorio = supabase.table("CONSULTAS").select(", MEDICOS()").neq("status", "Livre").execute()
     
-    if res_relatorio.data:
-        dados = []
-        for r in res_relatorio.data:
-            dados.append({
-                "Data/Hora": r['data_hora'],
-                "Médico": r['MEDICOS']['nome'],
-                "Unidade": r['MEDICOS']['unidade'],
-                "Paciente": f"{r['paciente_nome']} {r['paciente_sobrenome']}",
-                "Telefone": r['paciente_telefone'],
-                "Convênio": r['paciente_convenio']
-            })
-        st.dataframe(pd.DataFrame(dados).sort_values(by="Data/Hora"), use_container_width=True)
-    else:
-        st.info("Nenhuma consulta agendada.")
+    # Busca consultas que NÃO estão livres (Marcadas ou Confirmadas)
+    try:
+        res_relatorio = supabase.table("CONSULTAS").select(", MEDICOS()").neq("status", "Livre").execute()
+        
+        if res_relatorio.data and len(res_relatorio.data) > 0:
+            dados = []
+            for r in res_relatorio.data:
+                # CORREÇÃO: Busca segura dos dados do médico (trata maiúsculas/minúsculas)
+                medico = r.get('MEDICOS') or r.get('medicos')
+                nome_medico = medico.get('nome', 'Não informado') if medico else 'Médico excluído'
+                unidade_medico = medico.get('unidade', 'Não informada') if medico else 'N/A'
+                
+                dados.append({
+                    "Data/Hora": r.get('data_hora'),
+                    "Médico": nome_medico,
+                    "Unidade": unidade_medico,
+                    "Paciente": f"{r.get('paciente_nome', '')} {r.get('paciente_sobrenome', '')}".strip(),
+                    "Telefone": r.get('paciente_telefone', 'N/A'),
+                    "Convênio": r.get('paciente_convenio', 'Particular')
+                })
+            
+            # Criar DataFrame e ordenar
+            df_final = pd.DataFrame(dados)
+            if not df_final.empty:
+                st.dataframe(df_final.sort_values(by="Data/Hora"), use_container_width=True)
+            else:
+                st.info("Nenhuma consulta processada para exibição.")
+                
+        else:
+            st.info("Nenhuma consulta agendada encontrada no sistema.")
+            
+    except Exception as e:
+        st.error(f"Erro ao carregar o relatório: {e}")
