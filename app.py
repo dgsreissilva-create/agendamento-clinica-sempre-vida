@@ -2,70 +2,224 @@ import streamlit as st
 from supabase import create_client
 import pandas as pd
 from datetime import datetime, timedelta
+import os
+from dotenv import load_dotenv
 
-# --- CONEXÃO DIRETA REVISADA ---
-# Dica: Se o erro "Invalid API Key" persistir, pegue uma nova 'anon public key' no painel do Supabase.
-URL_S = "https://mxsuvjgwpqzhaqbzrvdq.supabase.co"
-KEY_S = "sb_publishable_08qbHGfKbBb8ljAHb7ckuQ_mp161ThN"
-supabase = create_client(URL_S, KEY_S)
+# ===============================
+# CONFIGURAÇÃO INICIAL
+# ===============================
 
-st.set_page_config(page_title="Agenda Clínica", layout="wide")
+load_dotenv()
 
-# --- LOGIN ---
-if "logado" not in st.session_state: st.session_state["logado"] = False
-with st.sidebar:
-    st.title("🏥 Menu Clínica")
-    if not st.session_state["logado"]:
-        senha = st.text_input("Senha Admin", type="password")
-        if st.button("Acessar"):
-            if senha == "1234":
-                st.session_state["logado"] = True
+SUPABASE_URL = os.getenv("SUPABASE_URL")
+SUPABASE_KEY = os.getenv("SUPABASE_SERVICE_ROLE_KEY")
+ADMIN_PASSWORD = os.getenv("ADMIN_PASSWORD")
+
+supabase = create_client(SUPABASE_URL, SUPABASE_KEY)
+
+st.set_page_config(page_title="Clínica Sempre Vida", layout="wide")
+
+if "autenticado" not in st.session_state:
+    st.session_state.autenticado = False
+
+# ===============================
+# SIDEBAR
+# ===============================
+
+st.sidebar.title("🏥 Clínica Sempre Vida")
+
+if not st.session_state.autenticado:
+    with st.sidebar.expander("🔐 Área Administrativa"):
+        senha = st.text_input("Senha", type="password")
+        if st.button("Entrar"):
+            if senha == ADMIN_PASSWORD:
+                st.session_state.autenticado = True
                 st.rerun()
-    else:
-        if st.button("Sair"):
-            st.session_state["logado"] = False
-            st.rerun()
+            else:
+                st.error("Senha incorreta")
 
-menu = st.sidebar.radio("Telas", ["Médicos", "Abrir Agenda", "Marcar Consulta"]) if st.session_state["logado"] else "Marcar Consulta"
+if st.session_state.autenticado:
+    menu = st.sidebar.radio("Menu", [
+        "1 - Cadastro de Médicos",
+        "2 - Abertura de Agenda",
+        "3 - Marcação de Consulta",
+        "4 - Consultas Marcadas"
+    ])
+    if st.sidebar.button("Sair"):
+        st.session_state.autenticado = False
+        st.rerun()
+else:
+    menu = "3 - Marcação de Consulta"
+    st.sidebar.info("Login necessário para área administrativa")
 
-# --- TELA MÉDICOS ---
-if menu == "Médicos":
-    st.header("👨‍⚕️ Cadastro de Médicos")
-    with st.form("f_med"):
+# ===============================
+# 1 - CADASTRO MÉDICOS
+# ===============================
+
+if menu == "1 - Cadastro de Médicos":
+    st.header("Cadastro de Médicos")
+
+    with st.form("form_medico"):
         nome = st.text_input("Nome do Médico")
-        esp = st.selectbox("Especialidade", ["Clínico Geral", "Cardiologia", "Pediatria"])
-        unid = st.selectbox("Unidade", ["Praça 7 - Rua Carijos", "Praça 7 - Rua Rio de Janeiro", "Eldorado"])
-        if st.form_submit_button("Salvar Médico"):
-            if nome:
-                supabase.table("MEDICOS").insert({"nome": nome, "especialidade": esp, "unidade": unid}).execute()
-                st.success("Médico cadastrado!")
+        especialidade = st.text_input("Especialidade")
+        unidade = st.text_input("Unidade")
 
-# --- TELA ABRIR AGENDA ---
-elif menu == "Abrir Agenda":
-    st.header("⏳ Gerar Horários")
-    m_data = supabase.table("MEDICOS").select("*").execute()
-    if m_data.data:
-        m_list = {m['nome']: m['id'] for m in m_data.data}
-        sel = st.selectbox("Médico", list(m_list.keys()))
+        if st.form_submit_button("Cadastrar"):
+            if nome and especialidade and unidade:
+                supabase.table("MEDICOS").insert({
+                    "nome": nome,
+                    "especialidade": especialidade,
+                    "unidade": unidade
+                }).execute()
+                st.success("Médico cadastrado com sucesso")
+            else:
+                st.warning("Preencha todos os campos")
+
+# ===============================
+# 2 - ABERTURA DE AGENDA
+# ===============================
+
+elif menu == "2 - Abertura de Agenda":
+
+    st.header("Gerar Horários")
+
+    medicos = supabase.table("MEDICOS").select("*").execute()
+
+    if medicos.data:
+
+        dict_medicos = {m["nome"]: m["id"] for m in medicos.data}
+
+        medico_escolhido = st.selectbox("Selecione o Médico", dict_medicos.keys())
         data = st.date_input("Data")
-        if st.button("Gerar Agenda (Início 08:00)"):
-            inicio = datetime.combine(data, datetime.min.time()).replace(hour=8)
-            vagas = [{"medico_id": m_list[sel], "data_hora": (inicio + timedelta(minutes=i*20)).isoformat(), "status": "Livre"} for i in range(10)]
-            supabase.table("CONSULTAS").insert(vagas).execute()
-            st.success("10 horários criados!")
+        hora_inicio = st.time_input("Hora Inicial")
+        intervalo = st.number_input("Intervalo (minutos)", min_value=5, value=20)
+        duracao = st.slider("Duração do turno (horas)", 1, 12, 4)
 
-# --- TELA MARCAR CONSULTA ---
-elif menu == "Marcar Consulta":
-    st.header("📅 Agendamento Online")
-    res = supabase.table("CONSULTAS").select("*, MEDICOS(nome, unidade)").eq("status", "Livre").execute()
-    if res.data:
-        df = pd.DataFrame(res.data)
-        df['op'] = df.apply(lambda x: f"{x['MEDICOS']['nome']} - {x['data_hora']}", axis=1)
-        escolha = st.selectbox("Escolha sua Vaga", df['op'])
-        v_id = df[df['op'] == escolha]['id'].values[0]
-        with st.form("f_pac"):
-            p_nome = st.text_input("Seu Nome")
+        if st.button("Gerar Agenda"):
+
+            inicio = datetime.combine(data, hora_inicio)
+            fim = inicio + timedelta(hours=duracao)
+
+            # Verificar duplicidade
+            existe = supabase.table("CONSULTAS") \
+                .select("id") \
+                .eq("medico_id", dict_medicos[medico_escolhido]) \
+                .gte("data_hora", inicio.isoformat()) \
+                .lte("data_hora", fim.isoformat()) \
+                .execute()
+
+            if existe.data:
+                st.warning("Já existe agenda nesse período")
+            else:
+                vagas = []
+                atual = inicio
+
+                while atual < fim:
+                    vagas.append({
+                        "medico_id": dict_medicos[medico_escolhido],
+                        "data_hora": atual.isoformat(),
+                        "status": "Livre"
+                    })
+                    atual += timedelta(minutes=intervalo)
+
+                supabase.table("CONSULTAS").insert(vagas).execute()
+                st.success(f"{len(vagas)} horários criados com sucesso")
+
+    else:
+        st.warning("Nenhum médico cadastrado")
+
+# ===============================
+# 3 - MARCAÇÃO DE CONSULTA
+# ===============================
+
+elif menu == "3 - Marcação de Consulta":
+
+    st.header("Agendamento Online")
+
+    consultas = supabase.table("CONSULTAS") \
+        .select("*, MEDICOS(*)") \
+        .eq("status", "Livre") \
+        .order("data_hora") \
+        .execute()
+
+    if consultas.data:
+
+        df = pd.DataFrame(consultas.data)
+        df["data_formatada"] = pd.to_datetime(df["data_hora"]).dt.strftime("%d/%m/%Y %H:%M")
+
+        df["exibir"] = df.apply(
+            lambda x: f"{x['MEDICOS']['nome']} | "
+                      f"{x['MEDICOS']['especialidade']} | "
+                      f"{x['MEDICOS']['unidade']} | "
+                      f"{x['data_formatada']}",
+            axis=1
+        )
+
+        escolha = st.selectbox("Escolha o horário", df["exibir"])
+        id_consulta = df[df["exibir"] == escolha]["id"].values[0]
+
+        with st.form("form_paciente"):
+            nome = st.text_input("Nome")
+            sobrenome = st.text_input("Sobrenome")
+            telefone = st.text_input("Telefone")
+            convenio = st.text_input("Convênio")
+
             if st.form_submit_button("Confirmar Agendamento"):
-                supabase.table("CONSULTAS").update({"paciente_nome": p_nome, "status": "Marcada"}).eq("id", v_id).execute()
-                st.success("Consulta agendada!")
-    else: st.info("Sem horários livres no momento.")
+
+                if nome and telefone:
+
+                    supabase.table("CONSULTAS") \
+                        .update({
+                            "paciente_nome": nome,
+                            "paciente_sobrenome": sobrenome,
+                            "paciente_telefone": telefone,
+                            "paciente_convenio": convenio,
+                            "status": "Marcada"
+                        }) \
+                        .eq("id", id_consulta) \
+                        .execute()
+
+                    st.success("Consulta marcada com sucesso")
+                    st.rerun()
+
+                else:
+                    st.error("Nome e telefone são obrigatórios")
+
+    else:
+        st.info("Não há horários disponíveis")
+
+# ===============================
+# 4 - CONSULTAS MARCADAS
+# ===============================
+
+elif menu == "4 - Consultas Marcadas":
+
+    st.header("Consultas Agendadas")
+
+    consultas = supabase.table("CONSULTAS") \
+        .select("*, MEDICOS(*)") \
+        .neq("status", "Livre") \
+        .order("data_hora") \
+        .execute()
+
+    if consultas.data:
+
+        lista = []
+
+        for c in consultas.data:
+            lista.append({
+                "Data/Hora": pd.to_datetime(c["data_hora"]).strftime("%d/%m/%Y %H:%M"),
+                "Médico": c["MEDICOS"]["nome"],
+                "Especialidade": c["MEDICOS"]["especialidade"],
+                "Unidade": c["MEDICOS"]["unidade"],
+                "Paciente": f"{c['paciente_nome']} {c['paciente_sobrenome']}",
+                "Telefone": c["paciente_telefone"],
+                "Convênio": c["paciente_convenio"],
+                "Status": c["status"]
+            })
+
+        df_final = pd.DataFrame(lista)
+        st.dataframe(df_final, use_container_width=True)
+
+    else:
+        st.info("Nenhuma consulta marcada")
