@@ -10,21 +10,27 @@ supabase = create_client(url, key)
 
 st.set_page_config(page_title="Clínica Sempre Vida", layout="wide")
 
-# --- 2. MENU LATERAL E LÓGICA DE LINK PÚBLICO ---
-# Se o link tiver "?p=1" no final, ele abre direto na Marcação de Consulta e esconde o menu
-query_params = st.query_params
-is_publico = query_params.get("p") == "1"
+# --- 2. LÓGICA DE LINK PÚBLICO E MENU ---
+# O Streamlit agora usa st.query_params para ler dados do URL
+try:
+    parametros = st.query_params
+    # Verifica se o link tem o sufixo ?p=1
+    is_publico = parametros.get("p") == "1"
+except:
+    is_publico = False
 
 if is_publico:
+    # Se for público, define a tela de agendamento como padrão
     menu = "3. Marcar Consulta"
-    # Esconde o menu lateral para o paciente não ver o administrativo
+    # Esconde o menu lateral para o paciente
     st.markdown("""
         <style>
             [data-testid="stSidebar"] {display: none;}
-            [data-testid="stSidebarNav"] {display: none;}
+            section[data-testid="stSidebar"] {width: 0px;}
         </style>
     """, unsafe_allow_html=True)
 else:
+    # Menu normal para administração
     st.sidebar.title("🏥 Gestão Clínica")
     menu = st.sidebar.radio("Navegação", [
         "1. Cadastro de Médicos", 
@@ -34,7 +40,6 @@ else:
         "5. Cancelar Consulta",
         "6. Excluir Grade Aberta"
     ])
-
 
 # --- TELA 1: CADASTRO DE MÉDICOS ---
 if menu == "1. Cadastro de Médicos":
