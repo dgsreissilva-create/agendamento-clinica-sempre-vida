@@ -3,42 +3,39 @@ from supabase import create_client
 import pandas as pd
 from datetime import datetime, timedelta
 import os
-from dotenv import load_dotenv
 
-# ===============================
-# CONFIGURAÇÃO INICIAL
-# ===============================
+# =============================
+# CONFIGURAÇÃO
+# =============================
 
-load_dotenv()
-
-SUPABASE_URL = os.getenv("SUPABASE_URL")
-SUPABASE_KEY = os.getenv("SUPABASE_SERVICE_ROLE_KEY")
-ADMIN_PASSWORD = os.getenv("ADMIN_PASSWORD")
+SUPABASE_URL = st.secrets["SUPABASE_URL"]
+SUPABASE_KEY = st.secrets["SUPABASE_SERVICE_ROLE_KEY"]
+ADMIN_PASSWORD = st.secrets["ADMIN_PASSWORD"]
 
 supabase = create_client(SUPABASE_URL, SUPABASE_KEY)
 
 st.set_page_config(page_title="Clínica Sempre Vida", layout="wide")
 
-if "autenticado" not in st.session_state:
-    st.session_state.autenticado = False
+if "auth" not in st.session_state:
+    st.session_state.auth = False
 
-# ===============================
+# =============================
 # SIDEBAR
-# ===============================
+# =============================
 
 st.sidebar.title("🏥 Clínica Sempre Vida")
 
-if not st.session_state.autenticado:
+if not st.session_state.auth:
     with st.sidebar.expander("🔐 Área Administrativa"):
         senha = st.text_input("Senha", type="password")
         if st.button("Entrar"):
             if senha == ADMIN_PASSWORD:
-                st.session_state.autenticado = True
+                st.session_state.auth = True
                 st.rerun()
             else:
                 st.error("Senha incorreta")
 
-if st.session_state.autenticado:
+if st.session_state.auth:
     menu = st.sidebar.radio("Menu", [
         "1 - Cadastro de Médicos",
         "2 - Abertura de Agenda",
@@ -46,17 +43,18 @@ if st.session_state.autenticado:
         "4 - Consultas Marcadas"
     ])
     if st.sidebar.button("Sair"):
-        st.session_state.autenticado = False
+        st.session_state.auth = False
         st.rerun()
 else:
     menu = "3 - Marcação de Consulta"
     st.sidebar.info("Login necessário para área administrativa")
 
-# ===============================
+# =============================
 # 1 - CADASTRO MÉDICOS
-# ===============================
+# =============================
 
 if menu == "1 - Cadastro de Médicos":
+
     st.header("Cadastro de Médicos")
 
     with st.form("form_medico"):
@@ -75,9 +73,9 @@ if menu == "1 - Cadastro de Médicos":
             else:
                 st.warning("Preencha todos os campos")
 
-# ===============================
+# =============================
 # 2 - ABERTURA DE AGENDA
-# ===============================
+# =============================
 
 elif menu == "2 - Abertura de Agenda":
 
@@ -87,12 +85,12 @@ elif menu == "2 - Abertura de Agenda":
 
     if medicos.data:
 
-        dict_medicos = {m["nome"]: m["id"] for m in medicos.data}
+        dict_med = {m["nome"]: m["id"] for m in medicos.data}
 
-        medico_escolhido = st.selectbox("Selecione o Médico", dict_medicos.keys())
+        medico = st.selectbox("Selecione o Médico", dict_med.keys())
         data = st.date_input("Data")
         hora_inicio = st.time_input("Hora Inicial")
-        intervalo = st.number_input("Intervalo (minutos)", min_value=5, value=20)
+        intervalo = st.number_input("Intervalo (minutos)", 5, 120, 20)
         duracao = st.slider("Duração do turno (horas)", 1, 12, 4)
 
         if st.button("Gerar Agenda"):
@@ -100,23 +98,23 @@ elif menu == "2 - Abertura de Agenda":
             inicio = datetime.combine(data, hora_inicio)
             fim = inicio + timedelta(hours=duracao)
 
-            # Verificar duplicidade
+            # Verifica duplicidade
             existe = supabase.table("CONSULTAS") \
                 .select("id") \
-                .eq("medico_id", dict_medicos[medico_escolhido]) \
+                .eq("medico_id", dict_med[medico]) \
                 .gte("data_hora", inicio.isoformat()) \
                 .lte("data_hora", fim.isoformat()) \
                 .execute()
 
             if existe.data:
-                st.warning("Já existe agenda nesse período")
+                st.warning("Já existe agenda nesse período.")
             else:
                 vagas = []
                 atual = inicio
 
                 while atual < fim:
                     vagas.append({
-                        "medico_id": dict_medicos[medico_escolhido],
+                        "medico_id": dict_med[medico],
                         "data_hora": atual.isoformat(),
                         "status": "Livre"
                     })
@@ -128,9 +126,9 @@ elif menu == "2 - Abertura de Agenda":
     else:
         st.warning("Nenhum médico cadastrado")
 
-# ===============================
+# =============================
 # 3 - MARCAÇÃO DE CONSULTA
-# ===============================
+# =============================
 
 elif menu == "3 - Marcação de Consulta":
 
@@ -147,7 +145,7 @@ elif menu == "3 - Marcação de Consulta":
         df = pd.DataFrame(consultas.data)
         df["data_formatada"] = pd.to_datetime(df["data_hora"]).dt.strftime("%d/%m/%Y %H:%M")
 
-        df["exibir"] = df.apply(
+        df["descricao"] = df.apply(
             lambda x: f"{x['MEDICOS']['nome']} | "
                       f"{x['MEDICOS']['especialidade']} | "
                       f"{x['MEDICOS']['unidade']} | "
@@ -155,8 +153,8 @@ elif menu == "3 - Marcação de Consulta":
             axis=1
         )
 
-        escolha = st.selectbox("Escolha o horário", df["exibir"])
-        id_consulta = df[df["exibir"] == escolha]["id"].values[0]
+        escolha = st.selectbox("Escolha o horário", df["descricao"])
+        id_consulta = df[df["descricao"] == escolha]["id"].values[0]
 
         with st.form("form_paciente"):
             nome = st.text_input("Nome")
@@ -165,7 +163,6 @@ elif menu == "3 - Marcação de Consulta":
             convenio = st.text_input("Convênio")
 
             if st.form_submit_button("Confirmar Agendamento"):
-
                 if nome and telefone:
 
                     supabase.table("CONSULTAS") \
@@ -181,16 +178,15 @@ elif menu == "3 - Marcação de Consulta":
 
                     st.success("Consulta marcada com sucesso")
                     st.rerun()
-
                 else:
                     st.error("Nome e telefone são obrigatórios")
 
     else:
         st.info("Não há horários disponíveis")
 
-# ===============================
+# =============================
 # 4 - CONSULTAS MARCADAS
-# ===============================
+# =============================
 
 elif menu == "4 - Consultas Marcadas":
 
@@ -204,10 +200,10 @@ elif menu == "4 - Consultas Marcadas":
 
     if consultas.data:
 
-        lista = []
+        dados = []
 
         for c in consultas.data:
-            lista.append({
+            dados.append({
                 "Data/Hora": pd.to_datetime(c["data_hora"]).strftime("%d/%m/%Y %H:%M"),
                 "Médico": c["MEDICOS"]["nome"],
                 "Especialidade": c["MEDICOS"]["especialidade"],
@@ -218,7 +214,7 @@ elif menu == "4 - Consultas Marcadas":
                 "Status": c["status"]
             })
 
-        df_final = pd.DataFrame(lista)
+        df_final = pd.DataFrame(dados)
         st.dataframe(df_final, use_container_width=True)
 
     else:
