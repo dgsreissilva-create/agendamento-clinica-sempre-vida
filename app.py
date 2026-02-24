@@ -1,13 +1,10 @@
 import streamlit as st
 from supabase import create_client
 
-# Estas linhas precisam ter o exato nome que você usou nos Secrets
-url = st.secrets["SUPABASE_URL"]
-key = st.secrets["SUPABASE_KEY"]
-
-# Note que agora usamos 'url' e 'key' em minúsculo, como definido acima
+# O segredo é usar o mesmo nome que está no cofre (Secrets)
+url = st.secrets["https://mxsuvjgwpqzhaqbzrvdq.supabase.co"]
+key = st.secrets["sb_publishable_08qbHGfKbBb8ljAHb7ckuQ_mp161ThN"]
 supabase = create_client(url, key)
-
 st.title("🏥 Agenda Clínica Sempre Vida")
 
 aba = st.sidebar.radio("Navegação", ["Cadastrar Paciente", "Ver Agenda"])
