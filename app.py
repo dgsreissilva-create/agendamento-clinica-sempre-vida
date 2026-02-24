@@ -4,8 +4,8 @@ import pandas as pd
 
 # O código precisa buscar EXATAMENTE os nomes que você salvou nos Secrets
 try:
-    url = st.secrets["SUPABASE_URL"]
-    key = st.secrets["SUPABASE_KEY"]
+    url = st.secrets["https://mxsuvjgwpqzhaqbzrvdq.supabase.co"]
+    key = st.secrets["sb_publishable_08qbHGfKbBb8ljAHb7ckuQ_mp161ThN"]
     supabase = create_client(url, key)
 except Exception as e:
     st.error("Erro nas chaves de conexão. Verifique os Secrets!")
