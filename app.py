@@ -1,137 +1,188 @@
 import streamlit as st
-import pandas as pd
-import datetime as dt_lib
 from supabase import create_client
+import pandas as pd
+from datetime import datetime, timedelta
 
-# --- CONFIGURAÇÃO DO SUPABASE ---
-url = st.secrets["SUPABASE_URL"]
-key = st.secrets["SUPABASE_KEY"]
-supabase = create_client(url, key)
+# --- CONFIGURAÇÃO DE CONEXÃO ---
+URL_S = "https://mxsuvjgwpqzhaqbzrvdq.supabase.co"
+KEY_S = "sb_publishable_08qbHGfKbBb8ljAHb7ckuQ_mp161ThN"
+supabase = create_client(URL_S, KEY_S)
 
-st.set_page_config(page_title="Clínica Sempre Vida", layout="wide")
+st.set_page_config(page_title="Gestão Sempre Vida", layout="wide", page_icon="🏥")
 
-# --- MENU LATERAL ---
-st.sidebar.title("🏥 Sistema de Gestão")
-menu = st.sidebar.radio("Navegação", [
-    "1. Cadastro de Médicos", 
-    "2. Abertura de Agenda", 
-    "3. Marcar Consulta",
-    "4. Relatório de Agendamentos"
-])
+# --- SISTEMA DE LOGIN ---
+if "autenticado" not in st.session_state:
+    st.session_state["autenticado"] = False
+
+with st.sidebar:
+    st.title("🏥 Menu Administrativo")
+    if not st.session_state["autenticado"]:
+        senha = st.text_input("Digite a Senha Admin", type="password")
+        if st.button("Acessar Sistema"):
+            if senha == "1234":
+                st.session_state["autenticado"] = True
+                st.rerun()
+            else:
+                st.error("Senha incorreta!")
+    else:
+        if st.button("Sair (Logout)"):
+            st.session_state["autenticado"] = False
+            st.rerun()
+
+# Definir qual menu mostrar
+if st.session_state["autenticado"]:
+    menu = st.sidebar.radio("Navegação:", [
+        "1. Cadastro de Médicos", 
+        "2. Abrir Agenda", 
+        "3. Marcar Consulta", 
+        "4. Relatório de Consultas"
+    ])
+else:
+    menu = "3. Marcar Consulta"  # Única tela que o paciente vê
 
 # --- TELA 1: CADASTRO DE MÉDICOS ---
 if menu == "1. Cadastro de Médicos":
-    st.header("👨‍⚕️ Cadastro de Médicos / Especialidade")
-    
-    especialidades_lista = [
-        "Cardiologia", "Clinica", "Dermatologia", "Endocrinologia - Diabete e Tireoide",
-        "Fonoaudiologia", "Ginecologia", "Neurologia", "Neuropsicologia",
-        "ODONTOLOGIA - DENTISTA", "Oftalmologia", "Ortopedia", 
-        "Otorrinolaringologia", "Pediatria", "Pneumologia", "Psicologia"
-    ]
-    
+    st.header("👨‍⚕️ Cadastro de Médicos / Especialidade / Unidade")
     with st.form("form_medicos", clear_on_submit=True):
         nome = st.text_input("Nome do Médico")
-        especialidade = st.selectbox("Especialidade", especialidades_lista)
+        especialidade = st.selectbox("Especialidade", ["Clínico Geral", "Cardiologia", "Ortopedia", "Pediatria", "Ginecologia"])
         unidade = st.selectbox("Unidade", ["Praça 7 - Rua Carijos", "Praça 7 - Rua Rio de Janeiro", "Eldorado"])
         
         if st.form_submit_button("Salvar Médico"):
             if nome:
-                try:
-                    supabase.table("MEDICOS").insert({
-                        "nome": nome, "especialidade": especialidade, "unidade": unidade
-                    }).execute()
-                    st.success(f"✅ Médico {nome} cadastrado com sucesso!")
-                except Exception as e:
-                    st.error(f"Erro ao salvar: {e}")
+                supabase.table("MEDICOS").insert({
+                    "nome": nome, "especialidade": especialidade, "unidade": unidade
+                }).execute()
+                st.success(f"Médico {nome} cadastrado com sucesso!")
             else:
-                st.warning("⚠️ Por favor, insira o nome do médico.")
+                st.warning("Por favor, insira o nome do médico.")
 
-# --- TELA 2: ABERTURA DE AGENDA ---
-elif menu == "2. Abertura de Agenda":
-    st.header("🏪 Abertura de Agenda Médica")
+
+# --- TELA 2: ABERTURA DE AGENDA (INTERVALOS) ---
+elif menu == "2. Abrir Agenda":
+    st.header("⏳ Abertura de Agenda por Intervalos")
+    
+    # Busca médicos e trata possíveis erros de conexão ou tabela vazia
     try:
-        res_med = supabase.table("MEDICOS").select("*").execute()
-        if res_med.data:
-            opcoes = {f"{m['nome']} ({m['especialidade']})": m['id'] for m in res_med.data}
-            escolha = st.selectbox("Selecione o Médico:", list(opcoes.keys()))
-            id_medico_vinc = opcoes[escolha]
-
-            col1, col2 = st.columns(2)
-            data_age = col1.date_input("Data do Atendimento", format="DD/MM/YYYY")
-            hora_ini = col2.time_input("Horário de Início", value=dt_lib.time(8, 0))
+        medicos_res = supabase.table("MEDICOS").select("*").execute()
+        
+        # Correção da lógica para evitar erro na linha 55:
+        if medicos_res.data and len(medicos_res.data) > 0:
+            lista_medicos = {m['nome']: m['id'] for m in medicos_res.data}
+            med_escolhido = st.selectbox("Selecione o Médico", list(lista_medicos.keys()))
             
-            c3, c4 = st.columns(2)
-            qtd = c3.number_input("Quantidade de Vagas", min_value=1, value=10)
-            int_min = c4.number_input("Intervalo (minutos)", min_value=5, value=20)
+            col1, col2 = st.columns(2)
+            data_atend = col1.date_input("Data do Atendimento", format="DD/MM/YYYY")
+            hora_inicio = col1.time_input("Horário de Início")
+            intervalo = col2.number_input("Duração de cada consulta (minutos)", value=20)
+            total_horas = col2.slider("Total de horas de trabalho", 1, 10, 4)
 
-            if st.button("Gerar e Salvar Agenda"):
-                lista_vagas = []
-                ponto_inicio = dt_lib.datetime.combine(data_age, hora_ini)
-                for i in range(int(qtd)):
-                    horario_vaga = ponto_inicio + dt_lib.timedelta(minutes=i * int(int_min))
-                    lista_vagas.append({
-                        "medico_id": id_medico_vinc,
-                        "data_hora": horario_vaga.isoformat(),
+            if st.button("Gerar Grade de Horários"):
+                inicio_dt = datetime.combine(data_atend, hora_inicio)
+                vagas = []
+                # Gera as vagas com base no intervalo escolhido
+                for i in range(0, int(total_horas * 60), int(intervalo)):
+                    vaga_hora = inicio_dt + timedelta(minutes=i)
+                    vagas.append({
+                        "medico_id": lista_medicos[med_escolhido],
+                        "data_hora": vaga_hora.isoformat(),
                         "status": "Livre"
                     })
-                supabase.table("CONSULTAS").insert(lista_vagas).execute()
-                st.success(f"✅ Agenda gerada para {escolha}!")
-                st.balloons()
+                
+                supabase.table("CONSULTAS").insert(vagas).execute()
+                st.success(f"Agenda gerada com sucesso para {med_escolhido}!")
         else:
-            st.warning("⚠️ Nenhum médico cadastrado. Vá na Tela 1.")
+            st.info("⚠️ Nenhum médico encontrado. Cadastre um médico na Tela 1 antes de abrir a agenda.")
+            
     except Exception as e:
-        st.error(f"Erro ao carregar médicos: {e}")
+        st.error(f"Erro ao acessar o banco de dados: {e}")
 
-# --- TELA 3: MARCAÇÃO DE CONSULTA ---
+# --- TELA 3: MARCAÇÃO DE CONSULTA (PÚBLICA) ---
 elif menu == "3. Marcar Consulta":
     st.header("📅 Agendamento de Consultas")
-    try:
-        res_vagas = supabase.table("CONSULTAS").select(", MEDICOS()").eq("status", "Livre").execute()
-        if res_vagas.data:
-            vagas_limpas = []
-            for r in res_vagas.data:
-                m = r.get('MEDICOS') or r.get('medicos')
-                if m and isinstance(m, dict):
-                    dt = pd.to_datetime(r['data_hora'])
-                    vagas_limpas.append({
-                        'id': r['id'], 'unidade': m.get('unidade', 'N/I'),
-                        'especialidade': m.get('especialidade', 'N/I'),
-                        'medico': m.get('nome', 'N/I'),
-                        'label_hora': dt.strftime('%d/%m/%Y às %H:%M'),
-                        'sort': r['data_hora']
-                    })
-            if vagas_limpas:
-                df = pd.DataFrame(vagas_limpas).sort_values(by='sort')
-                c1, c2 = st.columns(2)
-                with c1:
-                    u_sel = st.selectbox("🏥 1. Escolha a Unidade", sorted(df['unidade'].unique()))
-                    df = df[df['unidade'] == u_sel]
-                    e_sel = st.selectbox("🩺 2. Escolha a Especialidade", sorted(df['especialidade'].unique()))
-                    df = df[df['especialidade'] == e_sel]
-                with c2:
-                    m_sel = st.selectbox("👨‍⚕️ 3. Escolha o Médico", sorted(df['medico'].unique()))
-                    df = df[df['medico'] == m_sel]
-                    h_sel = st.selectbox("⏰ 4. Escolha o Horário", df['label_hora'].tolist())
-                
-                id_vaga_sel = df[df['label_hora'] == h_sel].iloc[0]['id']
-                with st.form("form_final"):
-                    st.write(f"📝 Agendando com: *{m_sel}* em *{h_sel}*")
-                    f1, f2 = st.columns(2)
-                    p_nome = f1.text_input("Nome")
-                    p_tel = f2.text_input("WhatsApp")
-                    p_conv = f2.text_input("Convênio")
-                    if st.form_submit_button("FINALIZAR AGENDAMENTO"):
-                        if p_nome and p_tel:
-                            supabase.table("CONSULTAS").update({"paciente_nome": p_nome, "paciente_telefone": p_tel, "paciente_convenio": p_conv, "status": "Marcada"}).eq("id", id_vaga_sel).execute()
-                            st.success("✅ Consulta marcada com sucesso!")
-                            st.balloons()
-            else:
-                st.warning("🔎 Sem horários com médicos vinculados.")
-        else:
-            st.info("🔎 Não há horários livres no momento.")
-    except Exception as e:
-        st.error(f"Erro no Agendamento: {e}")
+    
+    # 1. Busca todos os horários livres com os dados dos médicos vinculados
+    res_vagas = supabase.table("CONSULTAS").select(", MEDICOS()").eq("status", "Livre").execute()
+    
+    if res_vagas.data and len(res_vagas.data) > 0:
+        df_vagas = pd.DataFrame(res_vagas.data)
+        
+        # Extração de informações para os filtros
+        def extrair_info_banco(linha):
+            med = linha.get('MEDICOS') or linha.get('medicos') or {}
+            dt_obj = pd.to_datetime(linha['data_hora'])
+            return pd.Series({
+                'unid_nome': med.get('unidade', 'N/I'),
+                'esp_nome': med.get('especialidade', 'N/I'),
+                'med_nome': med.get('nome', 'N/I'),
+                'data_br': dt_obj.strftime('%d/%m/%Y'),
+                'hora_br': dt_obj.strftime('%H:%M'),
+                'display_horario': dt_obj.strftime('%d/%m/%Y às %H:%M')
+            })
+
+        df_info = df_vagas.apply(extrair_info_banco, axis=1)
+        df_final = pd.concat([df_vagas, df_info], axis=1)
+
+        # --- SELEÇÃO SEQUENCIAL (PUXANDO DO BANCO) ---
+        c1, c2 = st.columns(2)
+        
+        with c1:
+            # Filtro de Unidade
+            unidades_banco = sorted(df_final['unid_nome'].unique())
+            unidade_sel = st.selectbox("🏥 Escolha a Unidade", unidades_banco)
+            df_filtro = df_final[df_final['unid_nome'] == unidade_sel]
+            
+            # Filtro de Especialidade (Baseado na Unidade)
+            esps_banco = sorted(df_filtro['esp_nome'].unique())
+            especialidade_sel = st.selectbox("🩺 Escolha a Especialidade", esps_banco)
+            df_filtro = df_filtro[df_filtro['esp_nome'] == especialidade_sel]
+
+        with c2:
+            # Filtro de Médico (Baseado na Especialidade)
+            meds_banco = sorted(df_filtro['med_nome'].unique())
+            medico_sel = st.selectbox("👨‍⚕️ Escolha o Médico", meds_banco)
+            df_filtro = df_filtro[df_filtro['med_nome'] == medico_sel]
+            
+            # Filtro de Horário (Baseado no Médico)
+            horarios_banco = df_filtro.sort_values(by='data_hora')
+            horario_sel = st.selectbox("⏰ Escolha o Dia e Horário", horarios_banco['display_horario'].tolist())
+
+        # Recupera o ID final para salvar
+        vaga_final = df_filtro[df_filtro['display_horario'] == horario_sel].iloc[0]
+        id_vaga = vaga_final['id']
+
+        st.markdown("---")
+        
+        # --- FORMULÁRIO DE DADOS PESSOAIS ---
+        with st.form("form_final_cliente", clear_on_submit=True):
+            st.write(f"📝 *Cadastrando consulta para:* {medico_sel} ({horario_sel})")
+            
+            col_f1, col_f2 = st.columns(2)
+            p_nome = col_f1.text_input("Nome")
+            p_sobrenome = col_f1.text_input("Sobrenome")
+            p_tel = col_f2.text_input("WhatsApp (com DDD)")
+            p_conv = col_f2.text_input("Convênio")
+            
+            if st.form_submit_button("FINALIZAR AGENDAMENTO"):
+                if p_nome and p_tel:
+                    try:
+                        supabase.table("CONSULTAS").update({
+                            "paciente_nome": p_nome, 
+                            "paciente_sobrenome": p_sobrenome,
+                            "paciente_telefone": p_tel, 
+                            "paciente_convenio": p_conv,
+                            "status": "Marcada"
+                        }).eq("id", id_vaga).execute()
+                        st.success("✅ Consulta agendada com sucesso!")
+                        st.balloons()
+                    except Exception as e:
+                        st.error(f"Erro ao salvar no banco: {e}")
+                else:
+                    st.error("⚠️ Preencha os campos obrigatórios (Nome e WhatsApp).")
+    else:
+        st.info("🔎 Não encontramos horários disponíveis para agendamento no momento.")
+
+
 
 # --- TELA 4: RELATÓRIO DE AGENDAMENTOS ---
 elif menu == "4. Relatório de Agendamentos":
