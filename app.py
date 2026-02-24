@@ -8,6 +8,7 @@ key = st.secrets["SUPABASE_KEY"]
 supabase = create_client(url, key)
 
 st.title("🏥 Agenda Clínica Sempre Vida")
+
 except Exception as e:
     st.error("Erro nas chaves de conexão. Verifique os Secrets!")
     st.stop()
