@@ -87,41 +87,74 @@ elif menu == "2. Abertura de Agenda":
 # --- TELA 3: MARCAÇÃO DE CONSULTA (4 Campos Separados) ---
 
 # --- TELA 3: MARCAÇÃO DE CONSULTA (PÚBLICA) ---
-
 elif menu == "3. Marcar Consulta":
     st.header("📅 Agendamento de Consultas")
     
-    # Busca horários livres trazendo os dados da tabela MEDICOS (o asterisco é essencial)
+    # 1. Busca todos os horários livres com os dados dos médicos vinculados
     res_vagas = supabase.table("CONSULTAS").select(", MEDICOS()").eq("status", "Livre").execute()
     
     if res_vagas.data and len(res_vagas.data) > 0:
         df_vagas = pd.DataFrame(res_vagas.data)
         
-        try:
-            # CORREÇÃO: Verifica se a chave MEDICOS existe (maiúscula ou minúscula)
-            def formatar_exibicao(linha):
-                # Tenta pegar os dados do médico independente da caixa das letras
-                medico = linha.get('MEDICOS') or linha.get('medicos')
-                if medico:
-                    nome = medico.get('nome', 'Médico N/I')
-                    unidade = medico.get('unidade', 'Unidade N/I')
-                    return f"{nome} | {linha['data_hora']} | {unidade}"
-                return f"Horário Avulso | {linha['data_hora']}"
+        # Extração de informações para os filtros
+        def extrair_info_banco(linha):
+            med = linha.get('MEDICOS') or linha.get('medicos') or {}
+            dt_obj = pd.to_datetime(linha['data_hora'])
+            return pd.Series({
+                'unid_nome': med.get('unidade', 'N/I'),
+                'esp_nome': med.get('especialidade', 'N/I'),
+                'med_nome': med.get('nome', 'N/I'),
+                'data_br': dt_obj.strftime('%d/%m/%Y'),
+                'hora_br': dt_obj.strftime('%H:%M'),
+                'display_horario': dt_obj.strftime('%d/%m/%Y às %H:%M')
+            })
 
-            df_vagas['display'] = df_vagas.apply(formatar_exibicao, axis=1)
+        df_info = df_vagas.apply(extrair_info_banco, axis=1)
+        df_final = pd.concat([df_vagas, df_info], axis=1)
+
+        # --- SELEÇÃO SEQUENCIAL (PUXANDO DO BANCO) ---
+        c1, c2 = st.columns(2)
+        
+        with c1:
+            # Filtro de Unidade
+            unidades_banco = sorted(df_final['unid_nome'].unique())
+            unidade_sel = st.selectbox("🏥 Escolha a Unidade", unidades_banco)
+            df_filtro = df_final[df_final['unid_nome'] == unidade_sel]
             
-            vaga_sel = st.selectbox("Escolha o Médico e Horário", df_vagas['display'])
-            id_vaga = df_vagas[df_vagas['display'] == vaga_sel]['id'].values[0]
+            # Filtro de Especialidade (Baseado na Unidade)
+            esps_banco = sorted(df_filtro['esp_nome'].unique())
+            especialidade_sel = st.selectbox("🩺 Escolha a Especialidade", esps_banco)
+            df_filtro = df_filtro[df_filtro['esp_nome'] == especialidade_sel]
 
-            with st.form("form_paciente"):
-                c1, c2 = st.columns(2)
-                p_nome = c1.text_input("Nome")
-                p_sobrenome = c1.text_input("Sobrenome")
-                p_tel = c2.text_input("WhatsApp")
-                p_conv = c2.text_input("Convênio")
-                
-                if st.form_submit_button("Confirmar Agendamento"):
-                    if p_nome and p_tel:
+        with c2:
+            # Filtro de Médico (Baseado na Especialidade)
+            meds_banco = sorted(df_filtro['med_nome'].unique())
+            medico_sel = st.selectbox("👨‍⚕️ Escolha o Médico", meds_banco)
+            df_filtro = df_filtro[df_filtro['med_nome'] == medico_sel]
+            
+            # Filtro de Horário (Baseado no Médico)
+            horarios_banco = df_filtro.sort_values(by='data_hora')
+            horario_sel = st.selectbox("⏰ Escolha o Dia e Horário", horarios_banco['display_horario'].tolist())
+
+        # Recupera o ID final para salvar
+        vaga_final = df_filtro[df_filtro['display_horario'] == horario_sel].iloc[0]
+        id_vaga = vaga_final['id']
+
+        st.markdown("---")
+        
+        # --- FORMULÁRIO DE DADOS PESSOAIS ---
+        with st.form("form_final_cliente", clear_on_submit=True):
+            st.write(f"📝 *Cadastrando consulta para:* {medico_sel} ({horario_sel})")
+            
+            col_f1, col_f2 = st.columns(2)
+            p_nome = col_f1.text_input("Nome")
+            p_sobrenome = col_f1.text_input("Sobrenome")
+            p_tel = col_f2.text_input("WhatsApp (com DDD)")
+            p_conv = col_f2.text_input("Convênio")
+            
+            if st.form_submit_button("FINALIZAR AGENDAMENTO"):
+                if p_nome and p_tel:
+                    try:
                         supabase.table("CONSULTAS").update({
                             "paciente_nome": p_nome, 
                             "paciente_sobrenome": p_sobrenome,
@@ -129,17 +162,14 @@ elif menu == "3. Marcar Consulta":
                             "paciente_convenio": p_conv,
                             "status": "Marcada"
                         }).eq("id", id_vaga).execute()
-                        st.success("Consulta marcada com sucesso!")
+                        st.success("✅ Consulta agendada com sucesso!")
                         st.balloons()
-                    else:
-                        st.error("Nome e Telefone são obrigatórios!")
-        except Exception as e:
-            st.error(f"Erro ao processar lista de horários: {e}")
-            # Log para te ajudar a debugar se o erro persistir
-            st.write("Dados recebidos do banco:", res_vagas.data[0] if res_vagas.data else "Vazio")
+                    except Exception as e:
+                        st.error(f"Erro ao salvar no banco: {e}")
+                else:
+                    st.error("⚠️ Preencha os campos obrigatórios (Nome e WhatsApp).")
     else:
-        st.info("Não há horários livres disponíveis no momento.")
-
+        st.info("🔎 Não encontramos horários disponíveis para agendamento no momento.")
 
 # --- TELA 4: RELATÓRIO DE AGENDAMENTOS (Formato de Tabela) ---
 elif menu == "4. Relatório de Agendamentos":
