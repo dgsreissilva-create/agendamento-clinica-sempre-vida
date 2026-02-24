@@ -85,64 +85,93 @@ elif menu == "2. Abertura de Agenda":
     except Exception as e:
         st.error(f"Erro ao gerar agenda: {e}")
 
-# --- TELA 3: MARCAÇÃO DE CONSULTA (PUXANDO DO BANCO) ---
+# --- TELA 3: MARCAÇÃO DE CONSULTA (COMPLETA COM CAMPOS EM BRANCO) ---
 elif menu == "3. Marcar Consulta":
     st.header("📅 Agendamento de Consultas")
+    
     try:
-        # O asterisco (*) é fundamental para puxar todos os campos
+        # Busca no banco
         res_vagas = supabase.table("CONSULTAS").select("*, MEDICOS(*)").eq("status", "Livre").execute()
         
-        if res_vagas.data:
+        if res_vagas.data and len(res_vagas.data) > 0:
             vagas_limpas = []
             for r in res_vagas.data:
                 m = r.get('MEDICOS') or r.get('medicos')
-                if m:
+                if m and isinstance(m, dict):
                     dt = pd.to_datetime(r['data_hora'])
                     vagas_limpas.append({
                         'id': r['id'],
                         'unidade': m.get('unidade', 'N/I'),
                         'especialidade': m.get('especialidade', 'N/I'),
                         'medico': m.get('nome', 'N/I'),
-                        'horario_texto': dt.strftime('%d/%m/%Y às %H:%M'),
+                        'display_horario': dt.strftime('%d/%m/%Y às %H:%M'),
                         'sort': r['data_hora']
                     })
             
-            if vagas_limpas:
-                df = pd.DataFrame(vagas_limpas).sort_values(by='sort')
+            df_final = pd.DataFrame(vagas_limpas).sort_values(by='sort')
+
+            # --- FILTROS EM CASCATA (INICIAM EM BRANCO) ---
+            st.info("👋 Selecione as opções para encontrar sua consulta:")
+            c1, c2 = st.columns(2)
+            
+            with c1:
+                lista_unid = ["Selecione a Unidade..."] + sorted(df_final['unidade'].unique().tolist())
+                u_sel = st.selectbox("1️⃣ Escolha a Unidade", lista_unid)
                 
-                c1, c2 = st.columns(2)
-                with c1:
-                    sel_unid = st.selectbox("🏥 1. Unidade", sorted(df['unidade'].unique()))
-                    df = df[df['unidade'] == sel_unid]
-                    sel_esp = st.selectbox("🩺 2. Especialidade", sorted(df['especialidade'].unique()))
-                    df = df[df['especialidade'] == sel_esp]
-                with c2:
-                    sel_med = st.selectbox("👨‍⚕️ 3. Médico", sorted(df['medico'].unique()))
-                    df = df[df['medico'] == sel_med]
-                    sel_hora = st.selectbox("⏰ 4. Horário", df['horario_texto'].tolist())
+                if u_sel != "Selecione a Unidade...":
+                    df_f = df_final[df_final['unidade'] == u_sel]
+                    lista_esp = ["Selecione a Especialidade..."] + sorted(df_f['especialidade'].unique().tolist())
+                    e_sel = st.selectbox("2️⃣ Escolha a Especialidade", lista_esp)
+                else:
+                    st.selectbox("2️⃣ Especialidade", ["Aguardando Unidade..."], disabled=True)
+                    e_sel = "Selecione a Especialidade..."
 
-                id_final = df[df['horario_texto'] == sel_hora].iloc[0]['id']
-
-                with st.form("form_marcar"):
-                    f1, f2 = st.columns(2)
-                    p_nome = f1.text_input("Nome")
-                    p_sobrenome = f1.text_input("Sobrenome")
-                    p_tel = f2.text_input("WhatsApp")
-                    p_conv = f2.text_input("Convênio")
+            with c2:
+                if e_sel != "Selecione a Especialidade..." and u_sel != "Selecione a Unidade...":
+                    df_f = df_f[df_f['especialidade'] == e_sel]
+                    lista_med = ["Selecione o Médico..."] + sorted(df_f['medico'].unique().tolist())
+                    m_sel = st.selectbox("3️⃣ Escolha o Médico", lista_med)
                     
-                    if st.form_submit_button("Confirmar Agendamento"):
-                        if p_nome and p_tel:
+                    if m_sel != "Selecione o Médico...":
+                        df_f = df_f[df_f['medico'] == m_sel]
+                        lista_hora = ["Selecione o Horário..."] + df_f['display_horario'].tolist()
+                        h_sel = st.selectbox("4️⃣ Escolha o Horário", lista_hora)
+                    else:
+                        st.selectbox("4️⃣ Horário", ["Aguardando Médico..."], disabled=True)
+                        h_sel = "Selecione o Horário..."
+                else:
+                    st.selectbox("3️⃣ Médico", ["Aguardando Especialidade..."], disabled=True)
+                    st.selectbox("4️⃣ Horário", ["Aguardando Médico..."], disabled=True)
+                    m_sel = "Selecione o Médico..."
+                    h_sel = "Selecione o Horário..."
+
+            # --- FORMULÁRIO (SÓ APARECE SE TUDO FOR SELECIONADO) ---
+            if "Selecione" not in f"{u_sel}{e_sel}{m_sel}{h_sel}":
+                id_vaga = df_f[df_f['display_horario'] == h_sel].iloc[0]['id']
+                st.markdown("---")
+                with st.form("form_final_ok"):
+                    st.write(f"📝 Confirmando: **{m_sel}** | **{h_sel}**")
+                    f1, f2 = st.columns(2)
+                    p_n = f1.text_input("Nome")
+                    p_s = f1.text_input("Sobrenome")
+                    p_t = f2.text_input("WhatsApp")
+                    p_c = f2.text_input("Convênio")
+                    
+                    if st.form_submit_button("FINALIZAR AGENDAMENTO"):
+                        if p_n and p_t:
                             supabase.table("CONSULTAS").update({
-                                "paciente_nome": p_nome, "paciente_sobrenome": p_sobrenome,
-                                "paciente_telefone": p_tel, "paciente_convenio": p_conv,
+                                "paciente_nome": p_n, "paciente_sobrenome": p_s,
+                                "paciente_telefone": p_t, "paciente_convenio": p_c,
                                 "status": "Marcada"
-                            }).eq("id", id_final).execute()
-                            st.success("✅ Consulta confirmada!")
-                
+                            }).eq("id", id_vaga).execute()
+                            st.success("✅ Agendado com sucesso!")
+                            st.balloons()
+                        else:
+                            st.error("⚠️ Nome e WhatsApp são obrigatórios.")
         else:
-            st.info("🔎 Não há horários disponíveis no momento. Gere horários na Tela 2.")
+            st.info("🔎 No momento, não há horários livres disponíveis.")
     except Exception as e:
-        st.error(f"Erro ao carregar horários: {e}")
+        st.error(f"Erro técnico: {e}")
 
 # --- TELA 4: RELATÓRIO ---
 elif menu == "4. Relatório de Agendamentos":
