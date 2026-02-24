@@ -98,18 +98,19 @@ elif menu == "2. Abrir Agenda":
         
 
 # --- TELA 3: MARCAÇÃO DE CONSULTA (PÚBLICA) ---
+
 # --- TELA 3: MARCAÇÃO DE CONSULTA (PÚBLICA) ---
 elif menu == "3. Marcar Consulta":
     st.header("📅 Agendamento de Consultas")
     
     try:
-        # Busca horários LIVRES e tenta trazer os MEDICOS vinculados
+        # Busca horários LIVRES e os MEDICOS vinculados
         res_vagas = supabase.table("CONSULTAS").select(", MEDICOS()").eq("status", "Livre").execute()
         
         if res_vagas.data and len(res_vagas.data) > 0:
             vagas_limpas = []
             for r in res_vagas.data:
-                # Segurança: Só aceita se o médico existir de fato no banco
+                # Segurança: Garante que o médico existe
                 m = r.get('MEDICOS') or r.get('medicos')
                 if m and isinstance(m, dict):
                     dt = pd.to_datetime(r['data_hora'])
@@ -118,8 +119,6 @@ elif menu == "3. Marcar Consulta":
                         'unidade': m.get('unidade', 'N/I'),
                         'especialidade': m.get('especialidade', 'N/I'),
                         'medico': m.get('nome', 'N/I'),
-                        'data_br': dt.strftime('%d/%m/%Y'),
-                        'hora_br': dt.strftime('%H:%M'),
                         'label_filtro': dt.strftime('%d/%m/%Y às %H:%M'),
                         'sort': r['data_hora']
                     })
@@ -133,24 +132,28 @@ elif menu == "3. Marcar Consulta":
                 c1, c2 = st.columns(2)
                 
                 with c1:
+                    # 1. Unidade
                     op_unidade = sorted(df['unidade'].unique())
                     sel_unidade = st.selectbox("🏥 1. Escolha a Unidade", op_unidade)
-                    df = df[df['unidade'] == sel_unidade]
+                    df_unid = df[df['unidade'] == sel_unidade]
                     
-                    op_esp = sorted(df['especialidade'].unique())
+                    # 2. Especialidade
+                    op_esp = sorted(df_unid['especialidade'].unique())
                     sel_esp = st.selectbox("🩺 2. Escolha a Especialidade", op_esp)
-                    df = df[df['especialidade'] == sel_esp]
+                    df_esp = df_unid[df_unid['especialidade'] == sel_esp]
 
                 with c2:
-                    op_med = sorted(df['medico'].unique())
+                    # 3. Médico
+                    op_med = sorted(df_esp['medico'].unique())
                     sel_med = st.selectbox("👨‍⚕️ 3. Escolha o Médico", op_med)
-                    df = df[df['medico'] == sel_med]
+                    df_med = df_esp[df_esp['medico'] == sel_med]
                     
-                    op_hora = df['label_filtro'].tolist()
+                    # 4. Horário (Aqui usamos 'label_filtro' que é o nome correto agora)
+                    op_hora = df_med['label_filtro'].tolist()
                     sel_hora = st.selectbox("⏰ 4. Escolha o Dia e Horário", op_hora)
 
-                # Pega o ID para salvar
-                id_final = df[df['label_filtro'] == sel_hora].iloc[0]['id']
+                # Pega o ID para salvar usando a seleção final
+                id_final = df_med[df_med['label_filtro'] == sel_hora].iloc[0]['id']
 
                 st.markdown("---")
                 
@@ -180,9 +183,9 @@ elif menu == "3. Marcar Consulta":
                         else:
                             st.error("⚠️ Nome e WhatsApp são obrigatórios!")
             else:
-                st.warning("🔎 Existem horários no banco, mas eles não estão vinculados a médicos válidos. Gere novos horários na Tela 2.")
+                st.warning("🔎 Horários encontrados, mas sem vínculo com médicos. Gere novos horários na Tela 2.")
         else:
-            st.info("🔎 Não há horários 'Livres' no sistema. Por favor, abra a agenda na Tela 2.")
+            st.info("🔎 Não há horários 'Livres' no sistema. Abra a agenda na Tela 2.")
             
     except Exception as e:
         st.error(f"Erro técnico: {e}")
