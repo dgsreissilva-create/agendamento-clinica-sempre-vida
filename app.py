@@ -97,38 +97,60 @@ elif menu == "2. Abrir Agenda":
         st.error(f"Erro ao acessar o banco de dados: {e}")
         
 # --- TELA 3: MARCAÇÃO DE CONSULTA ---
+# --- TELA 3: MARCAÇÃO DE CONSULTA (PÚBLICA) ---
+
 elif menu == "3. Marcar Consulta":
     st.header("📅 Agendamento de Consultas")
+    
+    # Busca horários livres trazendo os dados da tabela MEDICOS (o asterisco é essencial)
     res_vagas = supabase.table("CONSULTAS").select(", MEDICOS()").eq("status", "Livre").execute()
     
-    if res_vagas.data:
+    if res_vagas.data and len(res_vagas.data) > 0:
         df_vagas = pd.DataFrame(res_vagas.data)
-        df_vagas['display'] = df_vagas.apply(lambda x: f"{x['MEDICOS']['nome']} | {x['data_hora']} | {x['MEDICOS']['unidade']}", axis=1)
         
-        vaga_sel = st.selectbox("Escolha o Médico e Horário", df_vagas['display'])
-        id_vaga = df_vagas[df_vagas['display'] == vaga_sel]['id'].values[0]
+        try:
+            # CORREÇÃO: Verifica se a chave MEDICOS existe (maiúscula ou minúscula)
+            def formatar_exibicao(linha):
+                # Tenta pegar os dados do médico independente da caixa das letras
+                medico = linha.get('MEDICOS') or linha.get('medicos')
+                if medico:
+                    nome = medico.get('nome', 'Médico N/I')
+                    unidade = medico.get('unidade', 'Unidade N/I')
+                    return f"{nome} | {linha['data_hora']} | {unidade}"
+                return f"Horário Avulso | {linha['data_hora']}"
 
-        with st.form("form_paciente"):
-            c1, c2 = st.columns(2)
-            p_nome = c1.text_input("Nome")
-            p_sobrenome = c1.text_input("Sobrenome")
-            p_tel = c2.text_input("WhatsApp")
-            p_conv = c2.text_input("Convênio")
+            df_vagas['display'] = df_vagas.apply(formatar_exibicao, axis=1)
             
-            if st.form_submit_button("Confirmar Agendamento"):
-                if p_nome and p_tel:
-                    supabase.table("CONSULTAS").update({
-                        "paciente_nome": p_nome, "paciente_sobrenome": p_sobrenome,
-                        "paciente_telefone": p_tel, "paciente_convenio": p_conv,
-                        "status": "Marcada"
-                    }).eq("id", id_vaga).execute()
-                    st.success("Consulta marcada com sucesso!")
-                    st.balloons()
-                else:
-                    st.error("Nome e Telefone são obrigatórios!")
+            vaga_sel = st.selectbox("Escolha o Médico e Horário", df_vagas['display'])
+            id_vaga = df_vagas[df_vagas['display'] == vaga_sel]['id'].values[0]
+
+            with st.form("form_paciente"):
+                c1, c2 = st.columns(2)
+                p_nome = c1.text_input("Nome")
+                p_sobrenome = c1.text_input("Sobrenome")
+                p_tel = c2.text_input("WhatsApp")
+                p_conv = c2.text_input("Convênio")
+                
+                if st.form_submit_button("Confirmar Agendamento"):
+                    if p_nome and p_tel:
+                        supabase.table("CONSULTAS").update({
+                            "paciente_nome": p_nome, 
+                            "paciente_sobrenome": p_sobrenome,
+                            "paciente_telefone": p_tel, 
+                            "paciente_convenio": p_conv,
+                            "status": "Marcada"
+                        }).eq("id", id_vaga).execute()
+                        st.success("Consulta marcada com sucesso!")
+                        st.balloons()
+                    else:
+                        st.error("Nome e Telefone são obrigatórios!")
+        except Exception as e:
+            st.error(f"Erro ao processar lista de horários: {e}")
+            # Log para te ajudar a debugar se o erro persistir
+            st.write("Dados recebidos do banco:", res_vagas.data[0] if res_vagas.data else "Vazio")
     else:
         st.info("Não há horários livres disponíveis no momento.")
-
+        
 # --- TELA 4: RELATÓRIO ---
 elif menu == "4. Relatório de Consultas":
     st.header("📋 Relatório Geral (Ordem Cronológica)")
