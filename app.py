@@ -42,6 +42,20 @@ else:
 
 # --- TELA 1: CADASTRO DE MÉDICOS ---
 
+# --- TELA 1: CADASTRO DE MÉDICOS ---
+if menu == "1. Cadastro de Médicos":
+    # Todo o código da tela 1 deve estar com 4 espaços de recuo
+    st.header("...")
+    # ... resto do código ...
+
+# --- TELA 2: ABERTURA DE AGENDA ---
+elif menu == "2. Abertura de Agenda":   # <-- Verifique se este 'e' do elif está alinhado com o 'i' do if acima
+    st.header("🏪 Abertura de Agenda Médica")
+    try:
+        # Todo o código aqui dentro deve ter mais 4 espaços de recuo
+        res_med = supabase.table("MEDICOS").select("*").execute()
+        # ...
+
 # --- TELA 2: ABERTURA DE AGENDA (VERSÃO BLINDADA) ---
 elif menu == "2. Abertura de Agenda":
     st.header("🏪 Abertura de Agenda Médica")
