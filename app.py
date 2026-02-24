@@ -143,40 +143,73 @@ else:
                     supabase.table("CONSULTAS").insert(v).execute()
                     st.success("Grade Gerada!")
 
-        elif menu == "4. Relatório de Agendamentos":
+
+elif menu == "4. Relatório de Agendamentos":
             st.header("📋 Relatório de Consultas")
             try:
+                # 1. Busca os dados no banco
                 res = supabase.table("CONSULTAS").select("*, MEDICOS(*)").execute()
+                
                 if res.data:
-                    relat_final = []
+                    relat_bruto = []
                     for i, r in enumerate(res.data):
                         m = r.get('MEDICOS') or r.get('medicos') or {}
                         dt = pd.to_datetime(r['data_hora'])
-                        data_hora_br = dt.strftime('%d/%m/%Y %H:%M')
+                        
+                        # Preparação dos dados
                         medico = m.get('nome', 'N/I')
                         especialidade = m.get('especialidade', '-')
                         unidade = m.get('unidade', '-')
                         paciente = f"{r.get('paciente_nome', '')} {r.get('paciente_sobrenome', '')}".strip()
-                        telefone = str(r.get('paciente_telefone', ''))
+                        data_hora_br = dt.strftime('%d/%m/%Y %H:%M')
                         
+                        # Link do WhatsApp com mensagem automática
                         msg = f"Olá, você terá uma consulta com {medico} / {especialidade} / {data_hora_br} / {unidade}"
-                        tel_limpo = ''.join(filter(str.isdigit, telefone))
+                        tel_limpo = ''.join(filter(str.isdigit, str(r.get('paciente_telefone', ''))))
                         link_wa = f"https://wa.me/55{tel_limpo}?text={msg.replace(' ', '%20')}" if tel_limpo else None
                         
-                        relat_final.append({
+                        relat_bruto.append({
                             "Nº": i + 1,
                             "Data/Hora": data_hora_br,
                             "Unidade": unidade,
                             "Médico": medico,
-                            "Paciente": paciente if paciente else "Não informado",
-                            "WhatsApp": link_wa
+                            "Paciente": paciente if paciente else "Livre",
+                            "WhatsApp": link_wa,
+                            "Confirmado": False, # Coluna para a recepção marcar
+                            "sort_key": r['data_hora'] # Coluna invisível para ordenar
                         })
                     
-                    df_relat = pd.DataFrame(relat_final)
-                    st.dataframe(df_relat, column_config={"WhatsApp": st.column_config.LinkColumn("📱 Ação", display_text="Chamar no WhatsApp 🟢")}, use_container_width=True, hide_index=True)
-                else: st.info("Nenhum registro encontrado.")
-            except Exception as e: st.error(f"Erro no relatório: {e}")
+                    # 2. Transforma em DataFrame e Ordena por Data/Hora real
+                    df_relat = pd.DataFrame(relat_bruto).sort_values(by="sort_key")
+                    
+                    # 3. Exibe a tabela com as configurações de coluna
+                    st.data_editor(
+                        df_relat.drop(columns=["sort_key"]), # Remove a chave de ordenação da visualização
+                        column_config={
+                            "Nº": st.column_config.NumberColumn(width="small"),
+                            "Data/Hora": st.column_config.TextColumn(width="medium"),
+                            "Unidade": st.column_config.TextColumn(width="medium"),
+                            "Paciente": st.column_config.TextColumn(width="medium"),
+                            "WhatsApp": st.column_config.LinkColumn(
+                                "📱 Ação", 
+                                display_text="Enviar 🟢"
+                            ),
+                            "Confirmado": st.column_config.CheckboxColumn(
+                                "OK?",
+                                help="Marque após confirmar com o paciente"
+                            )
+                        },
+                        use_container_width=True,
+                        hide_index=True
+                    )
+                    st.caption("💡 Dica: Clique em 'Enviar' para abrir o WhatsApp e marque 'OK' para controle da recepção.")
+                else:
+                    st.info("🔎 Nenhum agendamento encontrado.")
+            except Exception as e:
+                st.error(f"Erro no relatório: {e}")
 
+
+        
         elif menu == "5. Cancelar Consulta":
             st.header("🚫 Cancelar Agendamento")
             res = supabase.table("CONSULTAS").select("*, MEDICOS(*)").eq("status", "Marcada").execute()
