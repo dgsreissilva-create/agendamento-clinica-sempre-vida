@@ -102,71 +102,72 @@ elif menu == "2. Abrir Agenda":
 elif menu == "3. Marcar Consulta":
     st.header("📅 Agendamento de Consultas")
     
-    # 1. Busca horários livres trazendo os dados vinculados da tabela MEDICOS
-    # O comando abaixo garante que o banco traga o nome, especialidade e unidade do médico
+    # Busca horários livres com os dados detalhados dos médicos
     res_vagas = supabase.table("CONSULTAS").select("*, MEDICOS(nome, especialidade, unidade)").eq("status", "Livre").execute()
     
     if res_vagas.data and len(res_vagas.data) > 0:
         df_vagas = pd.DataFrame(res_vagas.data)
         
-        try:
-            def formatar_para_paciente(linha):
-                # Busca os dados dentro da coluna vinculada 'MEDICOS'
-                med = linha.get('MEDICOS') or linha.get('medicos')
-                
-                # Formatação da Data/Hora para padrão BR
-                data_dt = pd.to_datetime(linha['data_hora'])
-                data_br = data_dt.strftime('%d/%m/%Y às %H:%M')
+        # Função interna para organizar os dados
+        def extrair_dados(linha):
+            med = linha.get('MEDICOS') or linha.get('medicos') or {}
+            dt_obj = pd.to_datetime(linha['data_hora'])
+            return pd.Series({
+                'unidade': med.get('unidade', 'N/I'),
+                'especialidade': med.get('especialidade', 'N/I'),
+                'medico': med.get('nome', 'N/I'),
+                'dia': dt_obj.strftime('%d/%m/%Y'),
+                'hora': dt_obj.strftime('%H:%M'),
+                'display': f"{med.get('unidade')} - {med.get('nome')} ({dt_obj.strftime('%d/%m %H:%M')})"
+            })
 
-                if med:
-                    # Aqui montamos a frase com todos os campos que você pediu
-                    u = med.get('unidade', 'Unidade N/I')
-                    e = med.get('especialidade', 'Especialidade N/I')
-                    m = med.get('nome', 'Médico N/I')
-                    return f"{u} | {e} | {m} | {data_br}"
-                
-                return f"Horário Avulso | {data_br}"
+        # Criamos colunas auxiliares para separação
+        df_aux = df_vagas.apply(extrair_dados, axis=1)
+        df_vagas = pd.concat([df_vagas, df_aux], axis=1)
 
-            # Criamos a nova lista de exibição
-            df_vagas['display_completo'] = df_vagas.apply(formatar_para_paciente, axis=1)
+        # 1. O paciente escolhe o horário em um seletor simplificado
+        vaga_sel = st.selectbox("Escolha um horário disponível:", df_vagas['display'].tolist())
+        
+        # Recupera os dados da linha selecionada
+        dados_sel = df_vagas[df_vagas['display'] == vaga_sel].iloc[0]
+        id_vaga = dados_sel['id']
+
+        # 2. EXIBIÇÃO EM CAMPOS SEPARADOS (Visualização do Agendamento)
+        st.markdown("---")
+        st.subheader("📍 Detalhes da Escolha")
+        
+        c_ver1, c_ver2, c_ver3 = st.columns(3)
+        c_ver1.metric("🏢 Unidade", dados_sel['unidade'])
+        c_ver2.metric("🩺 Especialidade", dados_sel['especialidade'])
+        c_ver3.metric("👨‍⚕️ Médico", dados_sel['medico'])
+        
+        c_ver4, c_ver5 = st.columns(2)
+        c_ver4.metric("📅 Dia", dados_sel['dia'])
+        c_ver5.metric("⏰ Horário", dados_sel['hora'])
+        st.markdown("---")
+
+        # 3. FORMULÁRIO DE DADOS PESSOAIS
+        with st.form("form_final", clear_on_submit=True):
+            st.write("📝 *Complete seus dados para finalizar:*")
+            col1, col2 = st.columns(2)
+            p_nome = col1.text_input("Nome")
+            p_sobrenome = col1.text_input("Sobrenome")
+            p_tel = col2.text_input("WhatsApp (com DDD)")
+            p_conv = col2.text_input("Convênio")
             
-            # Ordenamos por data para facilitar para o paciente
-            df_vagas = df_vagas.sort_values(by='data_hora')
-
-            vaga_selecionada = st.selectbox(
-                "Selecione a Unidade, Especialidade, Médico e Horário:", 
-                df_vagas['display_completo'].tolist()
-            )
-            
-            # Localiza o ID correto para salvar no banco depois
-            id_da_vaga = df_vagas[df_vagas['display_completo'] == vaga_selecionada]['id'].values[0]
-
-            with st.form("form_final_agendamento"):
-                st.markdown(f"📌 *Você selecionou:* {vaga_selecionada}")
-                
-                col1, col2 = st.columns(2)
-                nome_p = col1.text_input("Nome")
-                sobrenome_p = col1.text_input("Sobrenome")
-                whatsapp_p = col2.text_input("WhatsApp (com DDD)")
-                convenio_p = col2.text_input("Convênio")
-                
-                if st.form_submit_button("Confirmar Agendamento"):
-                    if nome_p and whatsapp_p:
-                        supabase.table("CONSULTAS").update({
-                            "paciente_nome": nome_p, 
-                            "paciente_sobrenome": sobrenome_p,
-                            "paciente_telefone": whatsapp_p, 
-                            "paciente_convenio": convenio_p,
-                            "status": "Marcada"
-                        }).eq("id", id_da_vaga).execute()
-                        st.success("✅ Sua consulta foi agendada com sucesso!")
-                        st.balloons()
-                    else:
-                        st.error("⚠️ Por favor, preencha o Nome e o WhatsApp.")
-        except Exception as e:
-            st.error(f"Erro ao processar dados: {e}")
+            if st.form_submit_button("Confirmar Agendamento"):
+                if p_nome and p_tel:
+                    supabase.table("CONSULTAS").update({
+                        "paciente_nome": p_nome, "paciente_sobrenome": p_sobrenome,
+                        "paciente_telefone": p_tel, "paciente_convenio": p_conv,
+                        "status": "Marcada"
+                    }).eq("id", id_vaga).execute()
+                    st.success("✅ Consulta marcada com sucesso!")
+                    st.balloons()
+                else:
+                    st.error("⚠️ Nome e Telefone são obrigatórios!")
     else:
-        st.info("No momento, não há horários disponíveis para agendamento.")
+        st.info("Não há horários livres disponíveis no momento.")
         
 # --- TELA 4: RELATÓRIO ---
 # --- TELA 4: RELATÓRIO (CONFIRMAÇÃO DE CONSULTAS) ---
