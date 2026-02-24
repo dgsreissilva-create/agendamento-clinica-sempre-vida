@@ -44,43 +44,48 @@ else:
 
 # --- TELA 1: CADASTRO DE MÉDICOS ---
 if menu == "1. Cadastro de Médicos":
-    # Todo o código da tela 1 deve estar com 4 espaços de recuo
-    st.header("...")
-    # ... resto do código ...
+    st.header("👨‍⚕️ Cadastro de Médicos / Especialidade / Unidade")
+    
+    especialidades_lista = [
+        "Cardiologia", "Clinica", "Dermatologia", "Endocrinologia - Diabete e Tireoide",
+        "Fonoaudiologia", "Ginecologia", "Neurologia", "Neuropsicologia",
+        "ODONTOLOGIA - DENTISTA", "Oftalmologia", "Ortopedia", 
+        "Otorrinolaringologia", "Pediatria", "Pneumologia", "Psicologia"
+    ]
+    
+    with st.form("form_medicos", clear_on_submit=True):
+        nome = st.text_input("Nome do Médico")
+        especialidade = st.selectbox("Especialidade", especialidades_lista)
+        unidade = st.selectbox("Unidade", ["Praça 7 - Rua Carijos", "Praça 7 - Rua Rio de Janeiro", "Eldorado"])
+        
+        if st.form_submit_button("Salvar Médico"):
+            if nome:
+                try:
+                    supabase.table("MEDICOS").insert({
+                        "nome": nome, "especialidade": especialidade, "unidade": unidade
+                    }).execute()
+                    st.success(f"Médico {nome} cadastrado com sucesso!")
+                except Exception as e:
+                    st.error(f"Erro ao salvar: {e}")
+            else:
+                st.warning("Por favor, insira o nome do médico.")
 
 # --- TELA 2: ABERTURA DE AGENDA ---
-elif menu == "2. Abertura de Agenda":   # <-- Verifique se este 'e' do elif está alinhado com o 'i' do if acima
-    st.header("🏪 Abertura de Agenda Médica")
-    try:
-        # Todo o código aqui dentro deve ter mais 4 espaços de recuo
-        res_med = supabase.table("MEDICOS").select("*").execute()
-        # ...
-
-# --- TELA 2: ABERTURA DE AGENDA (VERSÃO BLINDADA) ---
 elif menu == "2. Abertura de Agenda":
     st.header("🏪 Abertura de Agenda Médica")
     
-    # Busca médicos no banco para garantir que a conexão está ativa
     try:
         res_med = supabase.table("MEDICOS").select("*").execute()
         
         if res_med.data:
-            # Criando a lista de médicos de forma ultra-segura
-            opcoes = {}
-            for m in res_med.data:
-                label = f"{m.get('nome')} ({m.get('especialidade')})"
-                opcoes[label] = m.get('id')
-            
+            opcoes = {f"{m.get('nome')} ({m.get('especialidade')})": m.get('id') for m in res_med.data}
             escolha = st.selectbox("Selecione o Médico:", list(opcoes.keys()))
             id_medico_vinc = opcoes[escolha]
 
             st.markdown("---")
-            
+            import datetime as dt_lib
             col1, col2 = st.columns(2)
             data_age = col1.date_input("Data do Atendimento", format="DD/MM/YYYY")
-            
-            # Aqui usamos o caminho completo para evitar erro de importação
-            import datetime as dt_lib
             hora_ini = col2.time_input("Horário de Início", value=dt_lib.time(8, 0))
             
             c3, c4 = st.columns(2)
@@ -89,9 +94,7 @@ elif menu == "2. Abertura de Agenda":
 
             if st.button("Gerar e Salvar Agenda"):
                 lista_vagas = []
-                # Cálculo dos horários
                 ponto_inicio = dt_lib.datetime.combine(data_age, hora_ini)
-                
                 for i in range(int(qtd)):
                     horario_vaga = ponto_inicio + dt_lib.timedelta(minutes=i * int(int_min))
                     lista_vagas.append({
@@ -99,16 +102,14 @@ elif menu == "2. Abertura de Agenda":
                         "data_hora": horario_vaga.isoformat(),
                         "status": "Livre"
                     })
-                
-                # Envio ao banco
                 supabase.table("CONSULTAS").insert(lista_vagas).execute()
                 st.success(f"✅ Agenda gerada para {escolha}!")
                 st.balloons()
         else:
             st.warning("⚠️ Nenhum médico cadastrado. Vá na Tela 1.")
-            
     except Exception as e:
         st.error(f"Erro ao carregar tela: {e}")
+
 
 # --- TELA 3: MARCAÇÃO DE CONSULTA (PÚBLICA) ---
 
