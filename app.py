@@ -126,7 +126,7 @@ else:
                 op = {f"{m['nome']} ({m['especialidade']})": m['id'] for m in res.data}
                 sel = st.selectbox("Médico", list(op.keys()))
                 c1, c2 = st.columns(2)
-                d = c1.date_input("Data")
+                d = c1.date_input("Data de Agenda", format="DD/MM/YYYY")
                 h = c2.time_input("Início")
                 q = st.number_input("Vagas", 1, 50, 10)
                 i = st.number_input("Intervalo (min)", 5, 60, 20)
