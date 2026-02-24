@@ -98,68 +98,75 @@ elif menu == "2. Abrir Agenda":
         
 
 # --- TELA 3: MARCAÇÃO DE CONSULTA (PÚBLICA) ---
+# --- TELA 3: MARCAÇÃO DE CONSULTA (PÚBLICA) ---
 elif menu == "3. Marcar Consulta":
     st.header("📅 Agendamento de Consultas")
     
-    # Busca horários livres trazendo os dados da tabela MEDICOS
-    res_vagas = supabase.table("CONSULTAS").select(", MEDICOS()").eq("status", "Livre").execute()
+    # 1. Busca horários livres trazendo os dados vinculados da tabela MEDICOS
+    # O comando abaixo garante que o banco traga o nome, especialidade e unidade do médico
+    res_vagas = supabase.table("CONSULTAS").select("*, MEDICOS(nome, especialidade, unidade)").eq("status", "Livre").execute()
     
     if res_vagas.data and len(res_vagas.data) > 0:
         df_vagas = pd.DataFrame(res_vagas.data)
         
         try:
-            def formatar_exibicao(linha):
-                # 1. Tenta pegar os dados do médico (maiúsculo ou minúsculo)
-                medico = linha.get('MEDICOS') or linha.get('medicos')
+            def formatar_para_paciente(linha):
+                # Busca os dados dentro da coluna vinculada 'MEDICOS'
+                med = linha.get('MEDICOS') or linha.get('medicos')
                 
-                # 2. Formata a Data e Hora para o padrão brasileiro (DD/MM/AAAA às HH:MM)
-                dt_obj = pd.to_datetime(linha['data_hora'])
-                data_br = dt_obj.strftime('%d/%m/%Y às %H:%M')
+                # Formatação da Data/Hora para padrão BR
+                data_dt = pd.to_datetime(linha['data_hora'])
+                data_br = data_dt.strftime('%d/%m/%Y às %H:%M')
 
-                if medico:
-                    nome = medico.get('nome', 'Médico N/I')
-                    esp = medico.get('especialidade', 'Especialidade N/I')
-                    unidade = medico.get('unidade', 'Unidade N/I')
-                    # Retorno completo conforme solicitado
-                    return f"{unidade} | {esp} | {nome} | {data_br}"
+                if med:
+                    # Aqui montamos a frase com todos os campos que você pediu
+                    u = med.get('unidade', 'Unidade N/I')
+                    e = med.get('especialidade', 'Especialidade N/I')
+                    m = med.get('nome', 'Médico N/I')
+                    return f"{u} | {e} | {m} | {data_br}"
                 
-                # Caso não encontre o médico por algum erro de vínculo
-                return f"Horário disponível | {data_br}"
+                return f"Horário Avulso | {data_br}"
 
-            # Aplica a formatação na nova coluna 'display'
-            df_vagas['display'] = df_vagas.apply(formatar_exibicao, axis=1)
+            # Criamos a nova lista de exibição
+            df_vagas['display_completo'] = df_vagas.apply(formatar_para_paciente, axis=1)
             
-            # Ordena os horários para o paciente ver os mais próximos primeiro
+            # Ordenamos por data para facilitar para o paciente
             df_vagas = df_vagas.sort_values(by='data_hora')
 
-            vaga_sel = st.selectbox("Selecione a Unidade, Especialidade, Médico e Horário:", df_vagas['display'])
-            id_vaga = df_vagas[df_vagas['display'] == vaga_sel]['id'].values[0]
+            vaga_selecionada = st.selectbox(
+                "Selecione a Unidade, Especialidade, Médico e Horário:", 
+                df_vagas['display_completo'].tolist()
+            )
+            
+            # Localiza o ID correto para salvar no banco depois
+            id_da_vaga = df_vagas[df_vagas['display_completo'] == vaga_selecionada]['id'].values[0]
 
-            with st.form("form_paciente"):
-                st.info(f"Você está agendando: *{vaga_sel}*")
-                c1, c2 = st.columns(2)
-                p_nome = c1.text_input("Nome")
-                p_sobrenome = c1.text_input("Sobrenome")
-                p_tel = c2.text_input("WhatsApp (com DDD)")
-                p_conv = c2.text_input("Convênio")
+            with st.form("form_final_agendamento"):
+                st.markdown(f"📌 *Você selecionou:* {vaga_selecionada}")
+                
+                col1, col2 = st.columns(2)
+                nome_p = col1.text_input("Nome")
+                sobrenome_p = col1.text_input("Sobrenome")
+                whatsapp_p = col2.text_input("WhatsApp (com DDD)")
+                convenio_p = col2.text_input("Convênio")
                 
                 if st.form_submit_button("Confirmar Agendamento"):
-                    if p_nome and p_tel:
+                    if nome_p and whatsapp_p:
                         supabase.table("CONSULTAS").update({
-                            "paciente_nome": p_nome, 
-                            "paciente_sobrenome": p_sobrenome,
-                            "paciente_telefone": p_tel, 
-                            "paciente_convenio": p_conv,
+                            "paciente_nome": nome_p, 
+                            "paciente_sobrenome": sobrenome_p,
+                            "paciente_telefone": whatsapp_p, 
+                            "paciente_convenio": convenio_p,
                             "status": "Marcada"
-                        }).eq("id", id_vaga).execute()
-                        st.success("✅ Consulta marcada com sucesso!")
+                        }).eq("id", id_da_vaga).execute()
+                        st.success("✅ Sua consulta foi agendada com sucesso!")
                         st.balloons()
                     else:
-                        st.error("⚠️ Nome e Telefone são obrigatórios!")
+                        st.error("⚠️ Por favor, preencha o Nome e o WhatsApp.")
         except Exception as e:
-            st.error(f"Erro ao processar lista de horários: {e}")
+            st.error(f"Erro ao processar dados: {e}")
     else:
-        st.info("Não há horários livres disponíveis no momento.")
+        st.info("No momento, não há horários disponíveis para agendamento.")
         
 # --- TELA 4: RELATÓRIO ---
 # --- TELA 4: RELATÓRIO (CONFIRMAÇÃO DE CONSULTAS) ---
