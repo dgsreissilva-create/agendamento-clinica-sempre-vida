@@ -2,40 +2,52 @@ import streamlit as st
 from supabase import create_client
 import pandas as pd
 
-# Tenta pegar as chaves de qualquer jeito (Maiúsculo ou Minúsculo)
+# --- CONEXÃO DIRETA (SEM SECRETS) ---
+# Colocamos aqui para evitar o erro de KeyError
+URL_DIRETA = "https://mxsuvjgwpqzhaqbzrvdq.supabase.co"
+KEY_DIRETA = "sb_publishable_08qbHGfKbBb8ljAHb7ckuQ_mp161ThN"
+
 try:
-    url = st.secrets.get("SUPABASE_URL") or st.secrets.get("supabase_url")
-    key = st.secrets.get("SUPABASE_KEY") or st.secrets.get("supabase_key")
-    
-    if not url or not key:
-        st.error("❌ Chaves não encontradas nos Secrets do Streamlit!")
-        st.stop()
-        
-    supabase = create_client(url, key)
+    supabase = create_client(URL_DIRETA, KEY_DIRETA)
 except Exception as e:
-    st.error(f"❌ Erro de Conexão: {e}")
+    st.error(f"Erro na conexão: {e}")
     st.stop()
 
-st.set_page_config(page_title="Agenda Clínica", layout="wide")
+# --- CONFIGURAÇÃO DA TELA ---
+st.set_page_config(page_title="Agenda Clínica Sempre Vida", layout="wide")
 
-# Interface
-st.sidebar.title("🏥 Menu")
-aba = st.sidebar.radio("Ir para:", ["Cadastrar", "Agenda"])
+st.sidebar.title("🏥 Menu Clínica")
+aba = st.sidebar.radio("Ir para:", ["👥 Cadastrar Paciente", "📊 Ver Agenda"])
 
-if aba == "Cadastrar":
+# --- ABA 1: CADASTRO ---
+if aba == "👥 Cadastrar Paciente":
     st.title("👥 Cadastro de Pacientes")
-    with st.form("meu_form", clear_on_submit=True):
-        nome = st.text_input("Nome")
+    with st.form("form_paciente", clear_on_submit=True):
+        nome = st.text_input("Nome Completo")
         tel = st.text_input("WhatsApp")
         conv = st.text_input("Convênio")
-        if st.form_submit_button("Salvar"):
-            supabase.table("PACIENTES").insert({"nome_completo": nome, "telefone": tel, "convenio": conv}).execute()
-            st.success("✅ Salvo!")
+        
+        if st.form_submit_button("Salvar no Banco"):
+            if nome:
+                # Tenta inserir os dados na tabela PACIENTES
+                supabase.table("PACIENTES").insert({
+                    "nome_completo": nome, 
+                    "telefone": tel, 
+                    "convenio": conv
+                }).execute()
+                st.success(f"✅ {nome} cadastrado com sucesso!")
+            else:
+                st.warning("⚠️ O nome é obrigatório.")
 
-elif aba == "Agenda":
-    st.title("📅 Agenda")
-    dados = supabase.table("PACIENTES").select("*").execute()
-    if dados.data:
-        st.dataframe(pd.DataFrame(dados.data))
+# --- ABA 2: AGENDA ---
+elif aba == "📊 Ver Agenda":
+    st.title("📋 Lista de Pacientes")
+    res = supabase.table("PACIENTES").select("*").execute()
+    
+    if res.data:
+        df = pd.DataFrame(res.data)
+        if 'id' in df.columns:
+            df = df.drop(columns=['id', 'created_at'], errors='ignore')
+        st.dataframe(df, use_container_width=True)
     else:
-        st.info("Agenda vazia.")
+        st.info("Nenhum paciente cadastrado ainda.")
