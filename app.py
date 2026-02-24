@@ -2,11 +2,13 @@ import streamlit as st
 from supabase import create_client
 import pandas as pd
 
-# O código precisa buscar EXATAMENTE os nomes que você salvou nos Secrets
-try:
-    url = st.secrets["SUPABASE_URL"]
-    key = st.secrets["SUPABASE_KEY"]
-    supabase = create_client(url, key)
+# O segredo é usar EXATAMENTE o que você escreveu nos Secrets
+# Se lá você escreveu SUPABASE_URL, aqui tem que ser igual
+url = st.secrets["SUPABASE_URL"]
+key = st.secrets["SUPABASE_KEY"]
+supabase = create_client(url, key)
+
+st.set_page_config(page_title="Agenda Clínica Sempre Vida", layout="wide")
 except Exception as e:
     st.error("Erro nas chaves de conexão. Verifique os Secrets!")
     st.stop()
