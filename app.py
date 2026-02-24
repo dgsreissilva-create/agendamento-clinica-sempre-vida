@@ -98,64 +98,94 @@ elif menu == "2. Abrir Agenda":
         
 
 # --- TELA 3: MARCAÇÃO DE CONSULTA (PÚBLICA) ---
-
-# --- TELA 3: MARCAÇÃO DE CONSULTA ---
+# --- TELA 3: MARCAÇÃO DE CONSULTA (PÚBLICA) ---
 elif menu == "3. Marcar Consulta":
     st.header("📅 Agendamento de Consultas")
     
     try:
-        # Busca horários e médicos
+        # Busca horários LIVRES e tenta trazer os MEDICOS vinculados
         res_vagas = supabase.table("CONSULTAS").select(", MEDICOS()").eq("status", "Livre").execute()
         
-        if res_vagas.data:
-            vagas_validadas = []
+        if res_vagas.data and len(res_vagas.data) > 0:
+            vagas_limpas = []
             for r in res_vagas.data:
-                # Segurança contra o erro NoneType visto nos prints
-                med = r.get('MEDICOS') or r.get('medicos')
-                if med and isinstance(med, dict):
+                # Segurança: Só aceita se o médico existir de fato no banco
+                m = r.get('MEDICOS') or r.get('medicos')
+                if m and isinstance(m, dict):
                     dt = pd.to_datetime(r['data_hora'])
-                    vagas_validadas.append({
+                    vagas_limpas.append({
                         'id': r['id'],
-                        'unidade': med.get('unidade', 'N/I'),
-                        'especialidade': med.get('especialidade', 'N/I'),
-                        'medico': med.get('nome', 'N/I'),
-                        'display_hora': dt.strftime('%d/%m/%Y às %H:%M'),
-                        'data_sort': r['data_hora']
+                        'unidade': m.get('unidade', 'N/I'),
+                        'especialidade': m.get('especialidade', 'N/I'),
+                        'medico': m.get('nome', 'N/I'),
+                        'data_br': dt.strftime('%d/%m/%Y'),
+                        'hora_br': dt.strftime('%H:%M'),
+                        'label_filtro': dt.strftime('%d/%m/%Y às %H:%M'),
+                        'sort': r['data_hora']
                     })
             
-            if vagas_validadas:
-                df = pd.DataFrame(vagas_validadas).sort_values(by='data_sort')
-                
-                # Filtros Sequenciais
+            if vagas_limpas:
+                df = pd.DataFrame(vagas_limpas).sort_values(by='sort')
+
+                st.info("👋 Selecione as opções abaixo para encontrar seu horário:")
+
+                # --- FILTROS EM CASCATA ---
                 c1, c2 = st.columns(2)
+                
                 with c1:
-                    sel_unidade = st.selectbox("🏥 1. Escolha a Unidade", sorted(df['unidade'].unique()))
+                    op_unidade = sorted(df['unidade'].unique())
+                    sel_unidade = st.selectbox("🏥 1. Escolha a Unidade", op_unidade)
                     df = df[df['unidade'] == sel_unidade]
-                    sel_esp = st.selectbox("🩺 2. Escolha a Especialidade", sorted(df['especialidade'].unique()))
+                    
+                    op_esp = sorted(df['especialidade'].unique())
+                    sel_esp = st.selectbox("🩺 2. Escolha a Especialidade", op_esp)
                     df = df[df['especialidade'] == sel_esp]
+
                 with c2:
-                    sel_med = st.selectbox("👨‍⚕️ 3. Escolha o Médico", sorted(df['medico'].unique()))
+                    op_med = sorted(df['medico'].unique())
+                    sel_med = st.selectbox("👨‍⚕️ 3. Escolha o Médico", op_med)
                     df = df[df['medico'] == sel_med]
-                    sel_hora = st.selectbox("⏰ 4. Escolha o Horário", df['display_hora'].tolist())
+                    
+                    op_hora = df['label_filtro'].tolist()
+                    sel_hora = st.selectbox("⏰ 4. Escolha o Dia e Horário", op_hora)
 
-                id_vaga = df[df['display_hora'] == sel_hora].iloc[0]['id']
+                # Pega o ID para salvar
+                id_final = df[df['label_filtro'] == sel_hora].iloc[0]['id']
 
-                with st.form("finalizar"):
-                    st.write(f"✅ Agendando com: *{sel_med}*")
-                    col_a, col_b = st.columns(2)
-                    n = col_a.text_input("Nome")
-                    t = col_b.text_input("WhatsApp")
-                    if st.form_submit_button("Confirmar Agendamento"):
-                        if n and t:
-                            supabase.table("CONSULTAS").update({"paciente_nome": n, "paciente_telefone": t, "status": "Marcada"}).eq("id", id_vaga).execute()
-                            st.success("Agendado com sucesso!")
-                            st.balloons()
+                st.markdown("---")
+                
+                # --- FORMULÁRIO FINAL ---
+                with st.form("form_final_agendamento", clear_on_submit=True):
+                    st.write(f"📝 *Confirmando:* {sel_med} | {sel_hora}")
+                    c_f1, c_f2 = st.columns(2)
+                    p_n = c_f1.text_input("Nome")
+                    p_s = c_f1.text_input("Sobrenome")
+                    p_t = c_f2.text_input("WhatsApp (com DDD)")
+                    p_c = c_f2.text_input("Convênio")
+                    
+                    if st.form_submit_button("FINALIZAR AGENDAMENTO"):
+                        if p_n and p_t:
+                            try:
+                                supabase.table("CONSULTAS").update({
+                                    "paciente_nome": p_n, 
+                                    "paciente_sobrenome": p_s,
+                                    "paciente_telefone": p_t, 
+                                    "paciente_convenio": p_c,
+                                    "status": "Marcada"
+                                }).eq("id", id_final).execute()
+                                st.success("✅ Consulta agendada com sucesso!")
+                                st.balloons()
+                            except Exception as e:
+                                st.error(f"Erro ao salvar: {e}")
+                        else:
+                            st.error("⚠️ Nome e WhatsApp são obrigatórios!")
             else:
-                st.warning("Encontramos horários, mas eles não estão vinculados a médicos válidos.")
+                st.warning("🔎 Existem horários no banco, mas eles não estão vinculados a médicos válidos. Gere novos horários na Tela 2.")
         else:
-            st.info("Não há horários livres no momento.")
+            st.info("🔎 Não há horários 'Livres' no sistema. Por favor, abra a agenda na Tela 2.")
+            
     except Exception as e:
-        st.error(f"Erro de conexão: {e}")
+        st.error(f"Erro técnico: {e}")
 
 # --- TELA 4: RELATÓRIO ---
 # --- TELA 4: RELATÓRIO (CONFIRMAÇÃO DE CONSULTAS) ---
