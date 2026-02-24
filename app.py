@@ -177,16 +177,71 @@ else:
             except Exception as e:
                 st.error(f"Erro: {e}")
 
-        elif menu == "5. Cancelar Consulta":
-            st.header("🚫 Cancelar")
-            res = supabase.table("CONSULTAS").select("*, MEDICOS(*)").eq("status", "Marcada").execute()
-            if res.data:
-                df = pd.DataFrame([{'id': r['id'], 'info': f"{r['paciente_nome']} | {r['data_hora']}"} for r in res.data])
-                sel = st.selectbox("Escolha:", df['info'])
-                if st.button("Confirmar Cancelamento"):
-                    supabase.table("CONSULTAS").update({"paciente_nome":None, "paciente_sobrenome":None, "paciente_telefone":None, "status":"Livre"}).eq("id", df[df['info']==sel].iloc[0]['id']).execute()
-                    st.success("Cancelado!"); st.rerun()
 
+
+elif menu == "5. Cancelar Consulta":
+            st.header("🚫 Cancelar Agendamento")
+            st.markdown("---")
+            
+            try:
+                # 1. Busca apenas consultas que estão com status 'Marcada'
+                res = supabase.table("CONSULTAS").select("*, MEDICOS(*)").eq("status", "Marcada").execute()
+                
+                if res.data and len(res.data) > 0:
+                    dados_cancelar = []
+                    for r in res.data:
+                        m = r.get('MEDICOS') or r.get('medicos') or {}
+                        dt = pd.to_datetime(r['data_hora'])
+                        
+                        # Organizando os dados para a busca
+                        paciente = f"{r.get('paciente_nome', '')} {r.get('paciente_sobrenome', '')}".strip()
+                        data_hora_br = dt.strftime('%d/%m/%Y %H:%M')
+                        medico = m.get('nome', 'N/I')
+                        
+                        # Texto que aparecerá na busca e na seleção
+                        info_txt = f"{paciente} | {data_hora_br} | Médico: {medico}"
+                        
+                        dados_cancelar.append({
+                            'id': r['id'],
+                            'info_completa': info_txt,
+                            'nome_paciente': paciente.lower()
+                        })
+                    
+                    df_cancelar = pd.DataFrame(dados_cancelar)
+
+                    # 2. Campo de Pesquisa Digitada
+                    busca = st.text_input("🔍 Digite o nome do paciente para buscar:", "").lower()
+
+                    # 3. Filtra a lista conforme a digitação
+                    df_filtrado = df_cancelar[df_cancelar['info_completa'].str.lower().contains(busca)]
+
+                    if not df_filtrado.empty:
+                        # 4. Seleção da consulta filtrada
+                        escolha = st.selectbox("Selecione o agendamento para cancelar:", 
+                                             ["Selecione..."] + df_filtrado['info_completa'].tolist())
+                        
+                        if escolha != "Selecione...":
+                            id_vaga = df_filtrado[df_filtrado['info_completa'] == escolha].iloc[0]['id']
+                            
+                            st.warning(f"Confirma o cancelamento de: **{escolha}**?")
+                            if st.button("🔴 CONFIRMAR CANCELAMENTO"):
+                                # Limpa os dados do paciente e volta para 'Livre'
+                                supabase.table("CONSULTAS").update({
+                                    "paciente_nome": None, "paciente_sobrenome": None,
+                                    "paciente_telefone": None, "paciente_convenio": None,
+                                    "status": "Livre"
+                                }).eq("id", id_vaga).execute()
+                                
+                                st.success("✅ Consulta cancelada com sucesso! O horário voltou a ficar disponível.")
+                                st.rerun()
+                    else:
+                        st.error("❌ Nenhum paciente encontrado com esse nome.")
+                else:
+                    st.info("🔎 Não há consultas marcadas no momento.")
+                    
+            except Exception as e:
+                st.error(f"Erro ao carregar cancelamentos: {e}")
+        
         elif menu == "6. Excluir Grade Aberta":
             st.header("🗑️ Excluir Grade")
             res = supabase.table("CONSULTAS").select("*, MEDICOS(*)").eq("status", "Livre").execute()
