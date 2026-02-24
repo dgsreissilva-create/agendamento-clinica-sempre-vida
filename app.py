@@ -17,7 +17,8 @@ menu = st.sidebar.radio("Navegação", [
     "2. Abertura de Agenda", 
     "3. Marcar Consulta",
     "4. Relatório de Agendamentos",
-    "5. Cancelar Consulta"  # <--- ADICIONE ESTA LINHA AQUI
+    "5. Cancelar Consulta",
+    "6. Excluir Grade Aberta"  # <--- ADICIONE ESTA LINHA AQUI
 ])
 
 # --- TELA 1: CADASTRO DE MÉDICOS ---
@@ -250,3 +251,50 @@ elif menu == "5. Cancelar Consulta":
             
     except Exception as e:
         st.error(f"Ocorreu um erro ao processar o cancelamento: {e}")
+
+# --- TELA 6: EXCLUIR GRADE ABERTA (CANCELAR ABERTURA) ---
+elif menu == "6. Excluir Grade Aberta":
+    st.header("🗑️ Excluir Horários Disponíveis")
+    st.markdown("---")
+    st.info("Esta tela permite apagar horários que estão **Livres**. Horários já marcados por pacientes não aparecem aqui.")
+
+    try:
+        # Busca apenas horários com status 'Livre'
+        res = supabase.table("CONSULTAS").select("*, MEDICOS(*)").eq("status", "Livre").execute()
+        
+        if res.data and len(res.data) > 0:
+            vagas_excluir = []
+            for r in res.data:
+                m = r.get('MEDICOS') or r.get('medicos')
+                dt = pd.to_datetime(r['data_hora'])
+                
+                # Criamos a linha para identificação
+                medico = m.get('nome', 'N/I')
+                especialidade = m.get('especialidade', 'N/I')
+                info = f"📅 {dt.strftime('%d/%m/%Y %H:%M')} | Médico: {medico} ({especialidade})"
+                
+                vagas_excluir.append({
+                    'id': r['id'],
+                    'info_completa': info
+                })
+            
+            df_vagas = pd.DataFrame(vagas_excluir)
+            
+            st.subheader("Selecione os horários para apagar:")
+            # Usamos multiselect para você poder apagar vários de uma vez só
+            selecionados = st.multiselect("Horários Livres no Sistema:", df_vagas['info_completa'].tolist())
+            
+            if selecionados:
+                ids_para_deletar = df_vagas[df_vagas['info_completa'].isin(selecionados)]['id'].tolist()
+
+                if st.button("🗑️ EXCLUIR HORÁRIOS SELECIONADOS"):
+                    # Deleta permanentemente as linhas do banco de dados
+                    supabase.table("CONSULTAS").delete().in_("id", ids_para_deletar).execute()
+                    
+                    st.success(f"✅ {len(ids_para_deletar)} horário(s) removido(s) com sucesso!")
+                    st.rerun()
+        else:
+            st.info("🔎 Não há horários 'Livres' para excluir.")
+            
+    except Exception as e:
+        st.error(f"Erro ao processar exclusão: {e}")
