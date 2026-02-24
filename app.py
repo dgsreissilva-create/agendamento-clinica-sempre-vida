@@ -45,7 +45,7 @@ if menu == "1. Cadastro de Médicos":
     st.header("👨‍⚕️ Cadastro de Médicos / Especialidade / Unidade")
     with st.form("form_medicos", clear_on_submit=True):
         nome = st.text_input("Nome do Médico")
-        especialidade = st.selectbox("Especialidade", ["Clínico Geral", "Cardiologia", "Ortopedia", "Pediatria", "Ginecologia"])
+        especialidade = st.selectbox("Especialidade", ["Clínico Geral", "Cardiologia", "Ginecologia", "Ortopedia", "Pediatria", "Oftalmologia", "Dermatologia", "Otorrinolaringologia", "Endocrinologia", "Endocrinologia - Diabete e Tireoide", "Fonoaudiologia", "Neuropsicologia", "Neurologia", "Nefrologia", "Pneumologia", "Psicologia", "ODONTOLOGIA"])
         unidade = st.selectbox("Unidade", ["Praça 7 - Rua Carijos", "Praça 7 - Rua Rio de Janeiro", "Eldorado"])
         
         if st.form_submit_button("Salvar Médico"):
