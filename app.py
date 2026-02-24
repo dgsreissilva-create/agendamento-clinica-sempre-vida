@@ -1,11 +1,12 @@
 import streamlit as st
 from supabase import create_client
-import pandas as pd
 
-# Chaves do NOVO projeto do Supabase
-URL = "SUA_NOVA_URL_AQUI"
-KEY = "SUA_NOVA_KEY_AQUI"
-supabase = create_client(URL, KEY)
+# Estas linhas precisam ter o exato nome que você usou nos Secrets
+url = st.secrets["SUPABASE_URL"]
+key = st.secrets["SUPABASE_KEY"]
+
+# Note que agora usamos 'url' e 'key' em minúsculo, como definido acima
+supabase = create_client(url, key)
 
 st.title("🏥 Agenda Clínica Sempre Vida")
 
