@@ -2,58 +2,64 @@ import streamlit as st
 from supabase import create_client
 import pandas as pd
 
-# CONFIGURAÇÃO DE CONEXÃO DIRETA
-URL_PROJETO = "https://mxsuvjgwpqzhaqbzrvdq.supabase.co"
-KEY_PROJETO = "sb_publishable_08qbHGfKbBb8ljAHb7ckuQ_mp161ThN"
+# Chaves diretas para eliminar erros de 'Secrets'
+URL_S = "https://mxsuvjgwpqzhaqbzrvdq.supabase.co"
+KEY_S = "sb_publishable_08qbHGfKbBb8ljAHb7ckuQ_mp161ThN"
 
-# Inicializa o cliente Supabase
-@st.cache_resource
-def init_connection():
-    return create_client(URL_PROJETO, KEY_PROJETO)
+# Conexão Robusta
+try:
+    supabase = create_client(URL_S, KEY_S)
+except Exception as e:
+    st.error(f"Erro na conexão com o banco: {e}")
 
-supabase = init_connection()
+# Configuração da Página
+st.set_page_config(page_title="Clínica Sempre Vida", layout="wide")
 
-# INTERFACE DO USUÁRIO
-st.set_page_config(page_title="Clínica Sempre Vida", layout="centered")
-st.title("🏥 Gestão de Pacientes - Clínica")
+# Menu Lateral
+st.sidebar.title("🏥 Gestão Clínica")
+opcao = st.sidebar.radio("Navegar:", ["Cadastrar Paciente", "Agenda de Clientes"])
 
-menu = st.sidebar.selectbox("Navegação", ["Cadastrar Novo", "Ver Agenda"])
-
-if menu == "Cadastrar Novo":
-    st.subheader("Formulário de Cadastro")
-    with st.form("form_cadastro", clear_on_submit=True):
-        nome = st.text_input("Nome do Paciente")
-        whatsapp = st.text_input("WhatsApp")
-        plano = st.text_input("Convênio")
+# --- CADASTRO ---
+if opcao == "Cadastrar Paciente":
+    st.header("📋 Cadastro de Novo Paciente")
+    
+    with st.form("meu_formulario", clear_on_submit=True):
+        col1, col2 = st.columns(2)
+        with col1:
+            nome = st.text_input("Nome Completo")
+            whats = st.text_input("WhatsApp / Telefone")
+        with col2:
+            plano = st.text_input("Convênio / Plano")
         
-        btn_salvar = st.form_submit_button("Finalizar Cadastro")
+        enviar = st.form_submit_button("Salvar Paciente")
         
-        if btn_salvar:
+        if enviar:
             if nome:
                 try:
-                    # Envia para a tabela PACIENTES
-                    dados = {
+                    # O nome das chaves aqui DEVE ser igual ao do SQL
+                    supabase.table("PACIENTES").insert({
                         "nome_completo": nome,
-                        "telefone": whatsapp,
+                        "telefone": whats,
                         "convenio": plano
-                    }
-                    supabase.table("PACIENTES").insert(dados).execute()
-                    st.success(f"✅ {nome} cadastrado com sucesso!")
-                except Exception as e:
-                    st.error(f"Erro ao salvar: {e}")
+                    }).execute()
+                    st.success(f"✨ {nome} cadastrado com sucesso!")
+                except Exception as error:
+                    st.error(f"Erro ao salvar: {error}")
             else:
-                st.warning("Por favor, preencha o nome.")
+                st.warning("⚠️ O campo 'Nome' é obrigatório.")
 
-elif menu == "Ver Agenda":
-    st.subheader("Lista de Pacientes Agendados")
+# --- AGENDA ---
+elif opcao == "Agenda de Clientes":
+    st.header("📅 Pacientes Cadastrados")
+    
     try:
-        response = supabase.table("PACIENTES").select("*").execute()
-        if response.data:
-            df = pd.DataFrame(response.data)
-            # Organiza as colunas para o usuário
-            df = df[['nome_completo', 'telefone', 'convenio']]
-            st.dataframe(df, use_container_width=True)
+        dados = supabase.table("PACIENTES").select("*").execute()
+        if dados.data:
+            df = pd.DataFrame(dados.data)
+            # Seleciona apenas as colunas importantes para exibir
+            colunas_exibir = ["nome_completo", "telefone", "convenio"]
+            st.dataframe(df[colunas_exibir], use_container_width=True)
         else:
-            st.info("Nenhum paciente encontrado.")
+            st.info("Nenhum registro encontrado no banco.")
     except Exception as e:
-        st.error(f"Erro ao carregar dados: {e}")
+        st.error(f"Erro ao carregar a agenda: {e}")
