@@ -22,7 +22,8 @@ menu = st.sidebar.radio("Navegação", [
     "4. Relatório de Agendamentos",
     "5. Cancelar Consulta",
     "6. Excluir Grade Aberta",
-    "7. Excluir Cadastro de Médico"
+    "7. Excluir Cadastro de Médico",
+    "8. Relatório Gerencial"
 ], index=2)
 
 # Função de validação de senha
@@ -96,20 +97,15 @@ if menu == "3. Marcar Consulta":
                     if st.form_submit_button("Confirmar Agendamento"):
                         if pn and pt:
                             supabase.table("CONSULTAS").update({
-                                "paciente_nome": pn, 
-                                "paciente_sobrenome": ps, 
-                                "paciente_telefone": pt, 
-                                "paciente_convenio": pc, 
+                                "paciente_nome": pn, "paciente_sobrenome": ps, 
+                                "paciente_telefone": pt, "paciente_convenio": pc, 
                                 "status": "Marcada"
                             }).eq("id", id_vaga).execute()
                             st.success("✅ Agendado!")
                             st.balloons()
-                        else:
-                            st.error("Por favor, preencha Nome e WhatsApp.")
-        else:
-            st.info("Nenhum horário livre no momento.")
-    except Exception as e:
-        st.error(f"Erro ao carregar agenda: {e}")
+                        else: st.error("Por favor, preencha Nome e WhatsApp.")
+        else: st.info("Nenhum horário livre no momento.")
+    except Exception as e: st.error(f"Erro ao carregar agenda: {e}")
 
 # TELAS ADMINISTRATIVAS (PROTEGIDAS)
 else:
@@ -125,14 +121,12 @@ else:
                 n = st.text_input("Nome do Médico")
                 e = st.selectbox("Especialidade", especialidades)
                 u = st.selectbox("Unidade", [
-                    "Pç 7 Rua Carijos 424 SL 2213", 
-                    "Pç 7 Rua Rio de Janeiro 462 SL 303", 
-                    "Eldorado Av Jose Faria da Rocha 4408 2 and", 
-                    "Eldorado Av Jose Faria da Rocha 5959"
+                    "Pç 7 Rua Carijos 424 SL 2213", "Pç 7 Rua Rio de Janeiro 462 SL 303", 
+                    "Eldorado Av Jose Faria da Rocha 4408 2 and", "Eldorado Av Jose Faria da Rocha 5959"
                 ])
                 if st.form_submit_button("Salvar Médico"):
                     supabase.table("MEDICOS").insert({"nome": n, "especialidade": e, "unidade": u}).execute()
-                    st.success("Médico Cadastrado com Sucesso!")
+                    st.success("Médico Cadastrado!")
 
         elif menu == "2. Abertura de Agenda":
             st.header("🏪 Abertura de Agenda")
@@ -140,118 +134,120 @@ else:
             if res.data:
                 op = {f"{m['nome']} ({m['especialidade']}) - {m['unidade']}": m['id'] for m in res.data}
                 sel = st.selectbox("Selecione o Médico e Unidade", list(op.keys()))
-                
                 c1, c2, c3 = st.columns(3)
                 d = c1.date_input("Data", format="DD/MM/YYYY")
                 h_ini = c2.time_input("Hora de Início", value=dt_lib.time(8, 0))
                 h_fim = c3.time_input("Hora Final", value=dt_lib.time(18, 0))
-                
-                i = st.number_input("Intervalo entre consultas (minutos)", 5, 120, 20)
-                
-                if st.button("Gerar Grade de Horários"):
+                i = st.number_input("Intervalo (minutos)", 5, 120, 20)
+                if st.button("Gerar Grade"):
                     vagas_list = []
-                    inicio_dt = dt_lib.datetime.combine(d, h_ini)
-                    fim_dt = dt_lib.datetime.combine(d, h_fim)
-                    
-                    if fim_dt <= inicio_dt:
-                        st.error("A Hora Final deve ser maior que a Hora de Início!")
-                    else:
-                        temp_dt = inicio_dt
-                        while temp_dt < fim_dt:
-                            vagas_list.append({
-                                "medico_id": op[sel], 
-                                "data_hora": temp_dt.isoformat(), 
-                                "status": "Livre"
-                            })
-                            temp_dt += dt_lib.timedelta(minutes=i)
-                        
-                        if vagas_list:
-                            supabase.table("CONSULTAS").insert(vagas_list).execute()
-                            st.success(f"✅ Agenda criada! Foram geradas {len(vagas_list)} vagas para o dia {d.strftime('%d/%m/%Y')}.")
-                        else:
-                            st.warning("Nenhum horário gerado.")
+                    temp_dt = dt_lib.datetime.combine(d, h_ini)
+                    fim_limite = dt_lib.datetime.combine(d, h_fim)
+                    while temp_dt < fim_limite:
+                        vagas_list.append({"medico_id": op[sel], "data_hora": temp_dt.isoformat(), "status": "Livre"})
+                        temp_dt += dt_lib.timedelta(minutes=i)
+                    if vagas_list:
+                        supabase.table("CONSULTAS").insert(vagas_list).execute()
+                        st.success(f"✅ {len(vagas_list)} horários criados!")
 
         elif menu == "4. Relatório de Agendamentos":
             st.header("📋 Relatório de Consultas")
-            try:
-                res = supabase.table("CONSULTAS").select("*, MEDICOS(*)").execute()
-                if res.data:
-                    relat = []
-                    for idx, r in enumerate(res.data):
-                        m = r.get('MEDICOS') or r.get('medicos') or {}
-                        dt = pd.to_datetime(r['data_hora'])
-                        data_br = dt.strftime('%d/%m/%Y %H:%M')
-                        med, esp, uni = m.get('nome','N/I'), m.get('especialidade','-'), m.get('unidade','-')
-                        pac = f"{r.get('paciente_nome','')} {r.get('paciente_sobrenome','')}".strip()
-                        tel = str(r.get('paciente_telefone', ''))
-                        msg = f"Olá, Gentileza Confirmar consulta Dr.(a) {med} / {esp} / {data_br} / {uni}"
-                        tel_limpo = ''.join(filter(str.isdigit, tel))
-                        link = f"https://wa.me/55{tel_limpo}?text={msg.replace(' ', '%20')}" if tel_limpo else None
-                        relat.append({
-                            "Nº": idx+1, "Data/Hora": data_br, "Unidade": uni, "Médico": med, 
-                            "Paciente": pac if pac else "Livre", "WhatsApp": link, 
-                            "Confirmado": False, "sort": r['data_hora']
-                        })
-                    df = pd.DataFrame(relat).sort_values(by="sort")
-                    st.data_editor(df.drop(columns=["sort"]), column_config={
-                        "WhatsApp": st.column_config.LinkColumn("📱 Ação", display_text="Enviar 🟢"), 
-                        "Confirmado": st.column_config.CheckboxColumn("OK?")
-                    }, use_container_width=True, hide_index=True)
-                else: st.info("Nenhum registro encontrado.")
-            except Exception as e: st.error(f"Erro no relatório: {e}")
+            res = supabase.table("CONSULTAS").select("*, MEDICOS(*)").execute()
+            if res.data:
+                relat = []
+                for idx, r in enumerate(res.data):
+                    m = r.get('MEDICOS') or r.get('medicos') or {}
+                    dt = pd.to_datetime(r['data_hora'])
+                    pac = f"{r.get('paciente_nome','')} {r.get('paciente_sobrenome','')}".strip()
+                    tel = ''.join(filter(str.isdigit, str(r.get('paciente_telefone', ''))))
+                    msg = f"Olá, Gentileza Confirmar consulta Dr.(a) {m.get('nome')} / {m.get('especialidade')} / {dt.strftime('%d/%m/%Y %H:%M')} / {m.get('unidade')}"
+                    link = f"https://wa.me/55{tel}?text={msg.replace(' ', '%20')}" if tel else None
+                    relat.append({"Nº": idx+1, "Data": dt.strftime('%d/%m/%Y %H:%M'), "Médico": m.get('nome'), "Paciente": pac if pac else "Livre", "WhatsApp": link, "sort": r['data_hora']})
+                st.data_editor(pd.DataFrame(relat).sort_values(by="sort").drop(columns=["sort"]), column_config={"WhatsApp": st.column_config.LinkColumn("📱 Ação", display_text="Enviar 🟢")}, use_container_width=True, hide_index=True)
 
         elif menu == "5. Cancelar Consulta":
             st.header("🚫 Cancelar Agendamento")
-            try:
-                res = supabase.table("CONSULTAS").select("*, MEDICOS(*)").eq("status", "Marcada").execute()
-                if res.data:
-                    lista_c = []
-                    for r in res.data:
-                        m = r.get('MEDICOS') or r.get('medicos') or {}
-                        pac = f"{r.get('paciente_nome', '')} {r.get('paciente_sobrenome', '')}".strip()
-                        dt = pd.to_datetime(r['data_hora']).strftime('%d/%m/%Y %H:%M')
-                        lista_c.append({'id': r['id'], 'info': f"{pac} | {dt} | Dr(a): {m.get('nome')}"})
-                    df_c = pd.DataFrame(lista_c)
-                    busca = st.text_input("🔍 Buscar Paciente pelo Nome:", "")
-                    df_f = df_c[df_c['info'].str.contains(busca, case=False)]
-                    sel = st.selectbox("Selecione para cancelar:", ["Selecione..."] + df_f['info'].tolist())
-                    if sel != "Selecione..." and st.button("Confirmar Cancelamento"):
-                        id_v = df_f[df_f['info'] == sel].iloc[0]['id']
-                        supabase.table("CONSULTAS").update({
-                            "paciente_nome": None, "paciente_sobrenome": None, 
-                            "paciente_telefone": None, "status": "Livre"
-                        }).eq("id", id_v).execute()
-                        st.success("Consulta Cancelada e horário liberado!"); st.rerun()
-                else: st.info("Sem consultas marcadas para cancelar.")
-            except Exception as e: st.error(f"Erro: {e}")
+            res = supabase.table("CONSULTAS").select("*, MEDICOS(*)").eq("status", "Marcada").execute()
+            if res.data:
+                lista_c = [{'id': r['id'], 'info': f"{r.get('paciente_nome','')} | {pd.to_datetime(r['data_hora']).strftime('%d/%m/%Y %H:%M')}"} for r in res.data]
+                df_c = pd.DataFrame(lista_c)
+                sel = st.selectbox("Selecione para cancelar:", ["Selecione..."] + df_c['info'].tolist())
+                if sel != "Selecione..." and st.button("Confirmar Cancelamento"):
+                    id_v = df_c[df_c['info'] == sel].iloc[0]['id']
+                    supabase.table("CONSULTAS").update({"paciente_nome":None, "paciente_sobrenome":None, "paciente_telefone":None, "status":"Livre"}).eq("id", id_v).execute()
+                    st.success("Cancelado!"); st.rerun()
 
         elif menu == "6. Excluir Grade Aberta":
             st.header("🗑️ Excluir Horários Livres")
             res = supabase.table("CONSULTAS").select("*, MEDICOS(*)").eq("status", "Livre").execute()
             if res.data:
                 df_e = pd.DataFrame([{'id': r['id'], 'info': f"{pd.to_datetime(r['data_hora']).strftime('%d/%m/%Y %H:%M')} - {r['MEDICOS']['nome']}"} for r in res.data])
-                sel_e = st.multiselect("Selecione os horários para excluir:", df_e['info'].tolist())
-                if st.button("Excluir Permanente"):
+                sel_e = st.multiselect("Selecione:", df_e['info'].tolist())
+                if st.button("Excluir"):
                     ids_e = df_e[df_e['info'].isin(sel_e)]['id'].tolist()
                     supabase.table("CONSULTAS").delete().in_("id", ids_e).execute()
-                    st.success(f"{len(ids_e)} horários excluídos!"); st.rerun()
+                    st.success("Excluído!"); st.rerun()
 
         elif menu == "7. Excluir Cadastro de Médico":
-            st.header("👨‍⚕️ Excluir Cadastro de Médico")
-            st.warning("⚠️ Atenção: Ao excluir um médico, todos os horários vinculados a ele (livres ou marcados) também serão removidos.")
+            st.header("👨‍⚕️ Excluir Médico")
             res_m = supabase.table("MEDICOS").select("*").execute()
             if res_m.data:
-                lista_m = {f"{m['nome']} ({m['especialidade']}) - {m['unidade']}": m['id'] for m in res_m.data}
-                sel_m = st.selectbox("Selecione o médico para excluir:", ["Selecione..."] + list(lista_m.keys()))
+                lista_m = {f"{m['nome']} ({m['especialidade']})": m['id'] for m in res_m.data}
+                sel_m = st.selectbox("Médico:", ["Selecione..."] + list(lista_m.keys()))
+                if sel_m != "Selecione..." and st.button("EXCLUIR PERMANENTEMENTE"):
+                    id_med = lista_m[sel_m]
+                    supabase.table("CONSULTAS").delete().eq("medico_id", id_med).execute()
+                    supabase.table("MEDICOS").delete().eq("id", id_med).execute()
+                    st.success("Médico removido!"); st.rerun()
+
+        elif menu == "8. Relatório Gerencial":
+            st.header("📊 Relatório Gerencial de Performance")
+            
+            # 1. PEGAR DADOS
+            res_cons = supabase.table("CONSULTAS").select("*, MEDICOS(*)").execute()
+            res_meds = supabase.table("MEDICOS").select("*").execute()
+            
+            if res_cons.data:
+                df = pd.DataFrame(res_cons.data)
+                df['data_dt'] = pd.to_datetime(df['data_hora']).dt.date
                 
-                if sel_m != "Selecione...":
-                    id_medico = lista_m[sel_m]
-                    if st.button("❌ EXCLUIR MÉDICO PERMANENTEMENTE"):
-                        # Primeiro remove as consultas vinculadas para evitar erro de chave estrangeira
-                        supabase.table("CONSULTAS").delete().eq("medico_id", id_medico).execute()
-                        # Depois remove o médico
-                        supabase.table("MEDICOS").delete().eq("id", id_medico).execute()
-                        st.success(f"O médico {sel_m} e sua grade foram removidos com sucesso.")
-                        st.rerun()
-            else:
-                st.info("Nenhum médico cadastrado.")
+                # FILTRO DE DATA
+                c1, c2 = st.columns(2)
+                d_ini = c1.date_input("De:", df['data_dt'].min())
+                d_fim = c2.date_input("Até:", df['data_dt'].max())
+                
+                df_filt = df[(df['data_dt'] >= d_ini) & (df['data_dt'] <= d_fim)]
+                
+                # --- MÉTRICAS ---
+                agendadas = df_filt[df_filt['status'] == 'Marcada']
+                livres = df_filt[df_filt['status'] == 'Livre']
+                
+                col1, col2, col3 = st.columns(3)
+                col1.metric("Consultas Agendadas", len(agendadas))
+                col2.metric("Vagas Livres (Previstas)", len(livres))
+                col3.metric("Total de Vagas Criadas", len(df_filt))
+                
+                st.divider()
+                
+                # --- AGENDADAS POR DATA ---
+                st.subheader("📅 Consultas Agendadas por Data")
+                if not agendadas.empty:
+                    df_agg = agendadas.groupby('data_dt').size().reset_index(name='Quantidade')
+                    df_agg.columns = ['Data', 'Total Agendado']
+                    st.line_chart(df_agg.set_index('Data'))
+                    st.table(df_agg)
+                else: st.info("Sem consultas marcadas no período.")
+                
+                # --- MÉDICOS SEM AGENDA ---
+                st.divider()
+                st.subheader("⚠️ Médicos SEM Agendas Abertas (neste período)")
+                medicos_com_agenda = df_filt['medico_id'].unique()
+                meds_sem_agenda = [m for m in res_meds.data if m['id'] not in medicos_com_agenda]
+                
+                if meds_sem_agenda:
+                    df_sem = pd.DataFrame(meds_sem_agenda)[['nome', 'especialidade', 'unidade']]
+                    df_sem.columns = ['Médico', 'Especialidade', 'Unidade']
+                    st.warning(f"Existem {len(meds_sem_agenda)} médicos sem horários configurados.")
+                    st.dataframe(df_sem, use_container_width=True, hide_index=True)
+                else: st.success("Todos os médicos possuem horários configurados!")
+            else: st.info("Não há dados para gerar o relatório.")
