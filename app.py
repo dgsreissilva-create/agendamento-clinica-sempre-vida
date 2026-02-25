@@ -21,7 +21,8 @@ menu = st.sidebar.radio("Navegação", [
     "3. Marcar Consulta",
     "4. Relatório de Agendamentos",
     "5. Cancelar Consulta",
-    "6. Excluir Grade Aberta"
+    "6. Excluir Grade Aberta",
+    "7. Excluir Cadastro de Médico"
 ], index=2)
 
 # Função de validação de senha
@@ -149,16 +150,14 @@ else:
                 
                 if st.button("Gerar Grade de Horários"):
                     vagas_list = []
-                    # Transforma em datetime para cálculo
                     inicio_dt = dt_lib.datetime.combine(d, h_ini)
                     fim_dt = dt_lib.datetime.combine(d, h_fim)
                     
-                    # Verifica se a hora final é maior que a inicial
                     if fim_dt <= inicio_dt:
                         st.error("A Hora Final deve ser maior que a Hora de Início!")
                     else:
                         temp_dt = inicio_dt
-                        while temp_dt + dt_lib.timedelta(minutes=0) < fim_dt:
+                        while temp_dt < fim_dt:
                             vagas_list.append({
                                 "medico_id": op[sel], 
                                 "data_hora": temp_dt.isoformat(), 
@@ -170,7 +169,7 @@ else:
                             supabase.table("CONSULTAS").insert(vagas_list).execute()
                             st.success(f"✅ Agenda criada! Foram geradas {len(vagas_list)} vagas para o dia {d.strftime('%d/%m/%Y')}.")
                         else:
-                            st.warning("Nenhum horário gerado. Verifique o intervalo e as horas selecionadas.")
+                            st.warning("Nenhum horário gerado.")
 
         elif menu == "4. Relatório de Agendamentos":
             st.header("📋 Relatório de Consultas")
@@ -189,29 +188,17 @@ else:
                         tel_limpo = ''.join(filter(str.isdigit, tel))
                         link = f"https://wa.me/55{tel_limpo}?text={msg.replace(' ', '%20')}" if tel_limpo else None
                         relat.append({
-                            "Nº": idx+1, 
-                            "Data/Hora": data_br, 
-                            "Unidade": uni, 
-                            "Médico": med, 
-                            "Paciente": pac if pac else "Livre", 
-                            "WhatsApp": link, 
-                            "Confirmado": False, 
-                            "sort": r['data_hora']
+                            "Nº": idx+1, "Data/Hora": data_br, "Unidade": uni, "Médico": med, 
+                            "Paciente": pac if pac else "Livre", "WhatsApp": link, 
+                            "Confirmado": False, "sort": r['data_hora']
                         })
                     df = pd.DataFrame(relat).sort_values(by="sort")
-                    st.data_editor(
-                        df.drop(columns=["sort"]), 
-                        column_config={
-                            "WhatsApp": st.column_config.LinkColumn("📱 Ação", display_text="Enviar 🟢"), 
-                            "Confirmado": st.column_config.CheckboxColumn("OK?")
-                        }, 
-                        use_container_width=True, 
-                        hide_index=True
-                    )
-                else: 
-                    st.info("Nenhum registro encontrado.")
-            except Exception as e: 
-                st.error(f"Erro no relatório: {e}")
+                    st.data_editor(df.drop(columns=["sort"]), column_config={
+                        "WhatsApp": st.column_config.LinkColumn("📱 Ação", display_text="Enviar 🟢"), 
+                        "Confirmado": st.column_config.CheckboxColumn("OK?")
+                    }, use_container_width=True, hide_index=True)
+                else: st.info("Nenhum registro encontrado.")
+            except Exception as e: st.error(f"Erro no relatório: {e}")
 
         elif menu == "5. Cancelar Consulta":
             st.header("🚫 Cancelar Agendamento")
@@ -231,24 +218,40 @@ else:
                     if sel != "Selecione..." and st.button("Confirmar Cancelamento"):
                         id_v = df_f[df_f['info'] == sel].iloc[0]['id']
                         supabase.table("CONSULTAS").update({
-                            "paciente_nome": None, 
-                            "paciente_sobrenome": None, 
-                            "paciente_telefone": None, 
-                            "status": "Livre"
+                            "paciente_nome": None, "paciente_sobrenome": None, 
+                            "paciente_telefone": None, "status": "Livre"
                         }).eq("id", id_v).execute()
                         st.success("Consulta Cancelada e horário liberado!"); st.rerun()
-                else: 
-                    st.info("Sem consultas marcadas para cancelar.")
-            except Exception as e: 
-                st.error(f"Erro: {e}")
+                else: st.info("Sem consultas marcadas para cancelar.")
+            except Exception as e: st.error(f"Erro: {e}")
 
         elif menu == "6. Excluir Grade Aberta":
             st.header("🗑️ Excluir Horários Livres")
             res = supabase.table("CONSULTAS").select("*, MEDICOS(*)").eq("status", "Livre").execute()
             if res.data:
                 df_e = pd.DataFrame([{'id': r['id'], 'info': f"{pd.to_datetime(r['data_hora']).strftime('%d/%m/%Y %H:%M')} - {r['MEDICOS']['nome']}"} for r in res.data])
-                sel_e = st.multiselect("Selecione os horários para excluir permanentemente:", df_e['info'].tolist())
+                sel_e = st.multiselect("Selecione os horários para excluir:", df_e['info'].tolist())
                 if st.button("Excluir Permanente"):
                     ids_e = df_e[df_e['info'].isin(sel_e)]['id'].tolist()
                     supabase.table("CONSULTAS").delete().in_("id", ids_e).execute()
-                    st.success(f"{len(ids_e)} horários excluídos com sucesso!"); st.rerun()
+                    st.success(f"{len(ids_e)} horários excluídos!"); st.rerun()
+
+        elif menu == "7. Excluir Cadastro de Médico":
+            st.header("👨‍⚕️ Excluir Cadastro de Médico")
+            st.warning("⚠️ Atenção: Ao excluir um médico, todos os horários vinculados a ele (livres ou marcados) também serão removidos.")
+            res_m = supabase.table("MEDICOS").select("*").execute()
+            if res_m.data:
+                lista_m = {f"{m['nome']} ({m['especialidade']}) - {m['unidade']}": m['id'] for m in res_m.data}
+                sel_m = st.selectbox("Selecione o médico para excluir:", ["Selecione..."] + list(lista_m.keys()))
+                
+                if sel_m != "Selecione...":
+                    id_medico = lista_m[sel_m]
+                    if st.button("❌ EXCLUIR MÉDICO PERMANENTEMENTE"):
+                        # Primeiro remove as consultas vinculadas para evitar erro de chave estrangeira
+                        supabase.table("CONSULTAS").delete().eq("medico_id", id_medico).execute()
+                        # Depois remove o médico
+                        supabase.table("MEDICOS").delete().eq("id", id_medico).execute()
+                        st.success(f"O médico {sel_m} e sua grade foram removidos com sucesso.")
+                        st.rerun()
+            else:
+                st.info("Nenhum médico cadastrado.")
