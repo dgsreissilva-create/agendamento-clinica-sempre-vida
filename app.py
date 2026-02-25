@@ -152,7 +152,7 @@ else:
                         med, esp, uni = m.get('nome','N/I'), m.get('especialidade','-'), m.get('unidade','-')
                         pac = f"{r.get('paciente_nome','')} {r.get('paciente_sobrenome','')}".strip()
                         tel = str(r.get('paciente_telefone', ''))
-                        msg = f"Olá, Gentileza Confirmar consulta {med} / {esp} / {data_br} / {uni}"
+                        msg = f"Olá, Gentileza Confirmar consulta Dr.(a) {med} / {esp} / {data_br} / {uni}"
                         tel_limpo = ''.join(filter(str.isdigit, tel))
                         link = f"https://wa.me/55{tel_limpo}?text={msg.replace(' ', '%20')}" if tel_limpo else None
                         relat.append({"Nº": idx+1, "Data/Hora": data_br, "Unidade": uni, "Médico": med, "Paciente": pac if pac else "Livre", "WhatsApp": link, "Confirmado": False, "sort": r['data_hora']})
