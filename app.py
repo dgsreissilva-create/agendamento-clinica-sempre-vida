@@ -32,12 +32,12 @@ def verificar_senha():
     if not st.session_state["autenticado"]:
         with st.container():
             st.subheader("🔒 Área Restrita")
-            senha_digitada = st.text_input("Senha:", type="password")
-            if st.button("Liberar"):
+            senha_digitada = st.text_input("Senha Administrativa:", type="password")
+            if st.button("Liberar Acesso"):
                 if senha_digitada == SENHA_ACESSO:
                     st.session_state["autenticado"] = True
                     st.rerun()
-                else: st.error("Incorreta")
+                else: st.error("Senha incorreta!")
         return False
     return True
 
@@ -46,52 +46,48 @@ def verificar_senha():
 if menu == "3. Marcar Consulta":
     st.header("📅 Agendamento de Consultas")
     try:
-        # BUSCA MANUAL PARA GARANTIR QUE TUDO APAREÇA
-        res_vagas = supabase.table("CONSULTAS").select("*").eq("status", "Livre").limit(4000).execute()
-        res_medicos = supabase.table("MEDICOS").select("*").execute()
+        # Puxa dados e faz o MERGE manual para garantir que médicos novos (ID 63) apareçam
+        res_v = supabase.table("CONSULTAS").select("*").eq("status", "Livre").limit(4000).execute()
+        res_m = supabase.table("MEDICOS").select("*").execute()
         
-        if res_vagas.data and res_medicos.data:
-            df_v = pd.DataFrame(res_vagas.data)
-            df_m = pd.DataFrame(res_medicos.data)
+        if res_v.data and res_m.data:
+            df_v = pd.DataFrame(res_v.data)
+            df_m = pd.DataFrame(res_m.data)
+            # Link direto entre as tabelas
+            df_final = pd.merge(df_v, df_m, left_on="medico_id", right_on="id")
             
-            # UNIMOS OS DADOS AQUI NO PYTHON (Merge manual)
-            df_f = pd.merge(df_v, df_m, left_on="medico_id", right_on="id")
-            
-            if not df_f.empty:
-                df_f['unidade'] = df_f['unidade'].astype(str).str.strip()
-                df_f['especialidade'] = df_f['especialidade'].astype(str).str.strip()
-                df_f['medico'] = df_f['nome'].astype(str).str.strip()
-                df_f['horario'] = pd.to_datetime(df_f['data_hora']).dt.strftime('%d/%m/%Y às %H:%M')
-
+            if not df_final.empty:
+                df_final['unidade'] = df_final['unidade'].astype(str).str.strip()
+                df_final['especialidade'] = df_final['especialidade'].astype(str).str.strip().str.upper()
+                
                 c1, c2 = st.columns(2)
                 with c1:
-                    u_list = sorted(df_f['unidade'].unique().tolist())
-                    u_sel = st.selectbox("1️⃣ Unidade", ["Selecione..."] + u_list)
+                    u_sel = st.selectbox("1️⃣ Unidade", ["Selecione..."] + sorted(df_final['unidade'].unique().tolist()))
                     if u_sel != "Selecione...":
-                        df_u = df_f[df_f['unidade'] == u_sel]
+                        df_u = df_final[df_final['unidade'] == u_sel]
                         e_sel = st.selectbox("2️⃣ Especialidade", ["Selecione..."] + sorted(df_u['especialidade'].unique().tolist()))
                     else: e_sel = "Selecione..."
                 with c2:
                     if e_sel != "Selecione..." and u_sel != "Selecione...":
                         df_e = df_u[df_u['especialidade'] == e_sel]
-                        m_sel = st.selectbox("3️⃣ Médico", ["Selecione..."] + sorted(df_e['medico'].unique().tolist()))
+                        m_sel = st.selectbox("3️⃣ Médico", ["Selecione..."] + sorted(df_e['nome'].unique().tolist()))
                         if m_sel != "Selecione...":
-                            df_m_final = df_e[df_e['medico'] == m_sel]
-                            h_sel = st.selectbox("4️⃣ Horário", ["Selecione..."] + df_m_final['horario'].tolist())
+                            df_m_sel = df_e[df_e['nome'] == m_sel]
+                            df_m_sel['horario_txt'] = pd.to_datetime(df_m_sel['data_hora']).dt.strftime('%d/%m/%Y às %H:%M')
+                            h_sel = st.selectbox("4️⃣ Horário", ["Selecione..."] + df_m_sel['horario_txt'].tolist())
                         else: h_sel = "Selecione..."
                     else: m_sel = h_sel = "Selecione..."
 
                 if "Selecione" not in f"{u_sel}{e_sel}{m_sel}{h_sel}":
-                    # id_x é o ID da tabela CONSULTAS após o merge
-                    id_vaga = df_m_final[df_m_final['horario'] == h_sel].iloc[0]['id_x']
+                    id_vaga = df_m_sel[df_m_sel['horario_txt'] == h_sel].iloc[0]['id_x']
                     with st.form("agendar"):
                         n, s = st.text_input("Nome"), st.text_input("Sobrenome")
                         w, c = st.text_input("WhatsApp"), st.text_input("Convênio")
-                        if st.form_submit_button("Confirmar"):
+                        if st.form_submit_button("Confirmar Agendamento"):
                             supabase.table("CONSULTAS").update({"paciente_nome": n, "paciente_sobrenome": s, "paciente_telefone": w, "paciente_convenio": c, "status": "Marcada"}).eq("id", id_vaga).execute()
                             st.success("✅ Agendado!"); st.balloons(); st.rerun()
-            else: st.warning("Vagas livres sem médicos correspondentes.")
-        else: st.info("Nenhuma vaga livre encontrada.")
+            else: st.warning("Existem horários livres, mas sem vínculo com médicos. Refaça a grade.")
+        else: st.info("Sem horários disponíveis.")
     except Exception as e: st.error(f"Erro: {e}")
 
 elif menu == "2. Abertura de Agenda":
@@ -99,29 +95,16 @@ elif menu == "2. Abertura de Agenda":
         st.header("🏪 Abertura de Agenda")
         res_m = supabase.table("MEDICOS").select("*").execute()
         if res_m.data:
-            op = {f"{m['nome']} ({m['especialidade']})": m['id'] for m in res_m.data}
-            sel = st.selectbox("Selecione o Médico", list(op.keys()))
+            med_dict = {f"{m['nome']} ({m['especialidade']})": m['id'] for m in res_m.data}
+            sel = st.selectbox("Selecione o Médico", list(med_dict.keys()))
             c1, c2, c3 = st.columns(3)
             d = c1.date_input("Data")
-            hi, hf = c2.time_input("Início", value=dt_lib.time(8,0)), c3.time_input("Fim", value=dt_lib.time(18,0))
+            hi, hf = c2.time_input("Início"), c3.time_input("Fim")
             if st.button("Gerar Grade"):
                 v = []
                 t, f = dt_lib.datetime.combine(d, hi), dt_lib.datetime.combine(d, hf)
                 while t < f:
-                    v.append({"medico_id": int(op[sel]), "data_hora": t.isoformat(), "status": "Livre"})
+                    v.append({"medico_id": int(med_dict[sel]), "data_hora": t.isoformat(), "status": "Livre"})
                     t += dt_lib.timedelta(minutes=20)
-                # Inserção explícita
                 supabase.table("CONSULTAS").insert(v).execute()
-                st.success(f"✅ Grade criada para ID {op[sel]}!")
-
-elif menu == "4. Relatório de Agendamentos":
-    st.header("📋 Relatório")
-    # Busca manual também no relatório para evitar erros de relacionamento
-    r_v = supabase.table("CONSULTAS").select("*").limit(1000).execute()
-    r_m = supabase.table("MEDICOS").select("*").execute()
-    if r_v.data and r_m.data:
-        df_v = pd.DataFrame(r_v.data)
-        df_m = pd.DataFrame(r_m.data)
-        df_r = pd.merge(df_v, df_m, left_on="medico_id", right_on="id", how="left")
-        df_r['Data'] = pd.to_datetime(df_r['data_hora']).dt.strftime('%d/%m/%Y %H:%M')
-        st.dataframe(df_r[['Data', 'nome', 'status', 'paciente_nome']].sort_values('Data', ascending=False))
+                st.success(f"✅ Grade criada com sucesso!")
