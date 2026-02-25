@@ -115,7 +115,7 @@ else:
             with st.form("f_med"):
                 n = st.text_input("Nome do Médico")
                 e = st.selectbox("Especialidade", especialidades)
-                u = st.selectbox("Unidade", ["Praça 7 - Rua Carijos 424 - SALA 2213", "Praça 7 - Rua Rio de Janeiro 462 - SALA 303", "Eldorado - Av. Jose Faria da Rocha 4408 - 2 andar", "Eldorado - Av. Jose Faria da Rocha 5959"])
+                u = st.selectbox("Unidade", ["Pç 7 Rua Carijos 424 SL 2213", "Pç 7 Rua Rio de Janeiro 462 SL 303", "Eldorado Av Jose Faria da Rocha 4408 2 and", "Eldorado Av Jose Faria da Rocha 5959"])
                 if st.form_submit_button("Salvar Médico"):
                     supabase.table("MEDICOS").insert({"nome": n, "especialidade": e, "unidade": u}).execute()
                     st.success("Médico Cadastrado com Sucesso!")
