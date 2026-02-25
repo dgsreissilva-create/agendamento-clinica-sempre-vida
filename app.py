@@ -139,22 +139,38 @@ else:
             if res.data:
                 op = {f"{m['nome']} ({m['especialidade']}) - {m['unidade']}": m['id'] for m in res.data}
                 sel = st.selectbox("Selecione o Médico e Unidade", list(op.keys()))
-                c1, c2 = st.columns(2)
+                
+                c1, c2, c3 = st.columns(3)
                 d = c1.date_input("Data", format="DD/MM/YYYY")
-                h = c2.time_input("Hora de Início")
-                q = st.number_input("Quantidade de Vagas", 1, 50, 10)
-                i = st.number_input("Intervalo (minutos)", 5, 60, 20)
+                h_ini = c2.time_input("Hora de Início", value=dt_lib.time(8, 0))
+                h_fim = c3.time_input("Hora Final", value=dt_lib.time(18, 0))
+                
+                i = st.number_input("Intervalo entre consultas (minutos)", 5, 120, 20)
+                
                 if st.button("Gerar Grade de Horários"):
                     vagas_list = []
-                    p_inicio = dt_lib.datetime.combine(d, h)
-                    for x in range(int(q)):
-                        vagas_list.append({
-                            "medico_id": op[sel], 
-                            "data_hora": (p_inicio + dt_lib.timedelta(minutes=x*i)).isoformat(), 
-                            "status": "Livre"
-                        })
-                    supabase.table("CONSULTAS").insert(vagas_list).execute()
-                    st.success(f"✅ Agenda criada para o dia {d.strftime('%d/%m/%Y')}!")
+                    # Transforma em datetime para cálculo
+                    inicio_dt = dt_lib.datetime.combine(d, h_ini)
+                    fim_dt = dt_lib.datetime.combine(d, h_fim)
+                    
+                    # Verifica se a hora final é maior que a inicial
+                    if fim_dt <= inicio_dt:
+                        st.error("A Hora Final deve ser maior que a Hora de Início!")
+                    else:
+                        temp_dt = inicio_dt
+                        while temp_dt + dt_lib.timedelta(minutes=0) < fim_dt:
+                            vagas_list.append({
+                                "medico_id": op[sel], 
+                                "data_hora": temp_dt.isoformat(), 
+                                "status": "Livre"
+                            })
+                            temp_dt += dt_lib.timedelta(minutes=i)
+                        
+                        if vagas_list:
+                            supabase.table("CONSULTAS").insert(vagas_list).execute()
+                            st.success(f"✅ Agenda criada! Foram geradas {len(vagas_list)} vagas para o dia {d.strftime('%d/%m/%Y')}.")
+                        else:
+                            st.warning("Nenhum horário gerado. Verifique o intervalo e as horas selecionadas.")
 
         elif menu == "4. Relatório de Agendamentos":
             st.header("📋 Relatório de Consultas")
