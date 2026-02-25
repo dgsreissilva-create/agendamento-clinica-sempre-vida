@@ -119,7 +119,7 @@ else:
 
         if menu == "1. Cadastro de Médicos":
             st.header("👨‍⚕️ Cadastro de Médicos")
-            especialidades = ["Cardiologia", "Clinica", "Dermatologia", "Endocrinologia", "Endocrinologia - Diabete e Tireoide", "Fonoaudiologia", "Ginecologia", "Nefrologia", "Neurologia", "Neuropsicologia", "ODONTOLOGIA", "Oftalmologia", "Ortopedia", "Otorrinolaringologia", "Pediatria", "Pneumologia", "Psicologia"]
+            especialidades = ["Cardiologia", "Clinica", "Dermatologia", "Endocrinologia", "Endocrinologia - Diabete e Tireoide", "Fonoaudiologia", "Ginecologia", "Nefrologia", "Neurologia", "Neuropsicologia", "ODONTOLOGIA", "Oftalmologia", "Ortopedia", "Otorrinolaringologia", "Pediatria", "Pneumologia", "Psicologia", "Urologia"]
             with st.form("f_med"):
                 n = st.text_input("Nome do Médico")
                 e = st.selectbox("Especialidade", especialidades)
