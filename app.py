@@ -55,17 +55,41 @@ def verificar_senha():
 
 # --- 3. LÓGICA DAS TELAS ---
 
-# TELA 1 - CADASTRO
+
+# TELA 1 - CADASTRO (ATUALIZADA COM TODAS AS ESPECIALIDADES)
 if menu == "1. Cadastro de Médicos":
     if verificar_senha():
         st.header("👨‍⚕️ Cadastro de Médicos")
         with st.form("f_med"):
             n = st.text_input("Nome do Médico")
-            e = st.selectbox("Especialidade", sorted(["Cardiologia", "Clinica", "Ginecologia", "Neurologia", "Nutricionista", "ODONTOLOGIA", "Ortopedia", "Psicologia", "Psiquiatria"]))
-            u = st.selectbox("Unidade", ["Pç 7 Rua Carijos 424 SL 2213", "Pç 7 Rua Rio de Janeiro 462 SL 303", "Eldorado Av Jose Faria da Rocha 4408 2 and"])
+            
+            # LISTA COMPLETA E ATUALIZADA (LINHA 64)
+            lista_especialidades = sorted([
+                "Cardiologia", "Clinica", "Dermatologia", "Endocrinologia", 
+                "Endocrinologia - Diabete e Tireoide", "Fonoaudiologia", "Ginecologia", 
+                "Nefrologia", "Neurologia", "Neuropsicologia", "Nutricionista", 
+                "ODONTOLOGIA", "Oftalmologia", "Ortopedia", "Otorrinolaringologia", 
+                "Pediatria", "Pneumologia", "Psicologia", "Psiquiatria", "Urologia"
+            ])
+            
+            e = st.selectbox("Especialidade", lista_especialidades)
+            
+            u = st.selectbox("Unidade", [
+                "Pç 7 Rua Carijos 424 SL 2213", 
+                "Pç 7 Rua Rio de Janeiro 462 SL 303", 
+                "Eldorado Av Jose Faria da Rocha 4408 2 and"
+            ])
+            
             if st.form_submit_button("Salvar"):
-                supabase.table("MEDICOS").insert({"nome": n.upper(), "especialidade": e, "unidade": u}).execute()
-                st.success("Médico Cadastrado!")
+                if n:
+                    supabase.table("MEDICOS").insert({
+                        "nome": n.upper(), 
+                        "especialidade": e, 
+                        "unidade": u
+                    }).execute()
+                    st.success(f"Médico {n.upper()} cadastrado com sucesso!")
+                else:
+                    st.error("Por favor, digite o nome do médico.")
 
 
 
