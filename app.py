@@ -228,18 +228,44 @@ elif menu == "5. Cancelar Consulta":
                 supabase.table("CONSULTAS").update({"status": "Livre", "paciente_nome": None, "paciente_telefone": None}).eq("id", op[sel]).execute()
                 st.success("Cancelado!"); st.rerun()
 
-# TELA 6 - EXCLUIR GRADE ABERTA
+
+# TELA 6 - EXCLUIR GRADE ABERTA (AJUSTE FINO: APENAS FUTURO)
 elif menu == "6. Excluir Grade Aberta":
     if verificar_senha():
-        st.header("🗑️ Remover Horários Livres")
+        st.header("🗑️ Remover Horários Livres (Futuro)")
+        
+        # 1. Puxa todas as vagas livres
         dados = buscar_todos("CONSULTAS", "*, MEDICOS(*)", filtros=[("status", "Livre")])
+        
         if dados:
-            df_ex = pd.DataFrame([{'id': r['id'], 'info': f"{r['MEDICOS']['nome']} | {pd.to_datetime(r['data_hora']).strftime('%d/%m/%Y %H:%M')}"} for r in dados])
-            sel = st.multiselect("Selecione os horários para remover do sistema:", df_ex['info'].tolist())
-            if st.button("Excluir Definitivamente"):
-                ids = df_ex[df_ex['info'].isin(sel)]['id'].tolist()
-                supabase.table("CONSULTAS").delete().in_("id", ids).execute()
-                st.success("Horários removidos!"); st.rerun()
+            agora = dt_lib.datetime.now().replace(tzinfo=None)
+            lista_futura = []
+            
+            for r in dados:
+                dt_vaga = pd.to_datetime(r['data_hora']).replace(tzinfo=None)
+                # SÓ APARECE NA LISTA SE FOR DE AGORA PARA FRENTE
+                if dt_vaga >= agora:
+                    m_nome = r['MEDICOS']['nome'] if r.get('MEDICOS') else "Médico não encontrado"
+                    lista_futura.append({
+                        'id': r['id'], 
+                        'info': f"{m_nome} | {dt_vaga.strftime('%d/%m/%Y %H:%M')}"
+                    })
+            
+            if lista_futura:
+                df_ex = pd.DataFrame(lista_futura)
+                sel = st.multiselect("Selecione os horários futuros para remover do sistema:", df_ex['info'].tolist())
+                
+                if st.button("Excluir Horários Selecionados"):
+                    ids_para_excluir = df_ex[df_ex['info'].isin(sel)]['id'].tolist()
+                    if ids_para_excluir:
+                        supabase.table("CONSULTAS").delete().in_("id", ids_para_excluir).execute()
+                        st.success(f"✅ {len(ids_para_excluir)} horários removidos!")
+                        st.rerun()
+            else:
+                st.info("Não existem horários 'Livres' para o futuro na grade.")
+        else:
+            st.info("Nenhuma grade aberta encontrada.")
+
 
 
 # TELA 7 - EXCLUIR CADASTRO DE MÉDICO (CORRIGIDA COM BUSCA TOTAL)
