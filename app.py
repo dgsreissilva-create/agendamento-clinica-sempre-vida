@@ -313,79 +313,58 @@ elif menu == "7. Excluir Cadastro de Médico":
             st.info("Não foram encontrados médicos cadastrados no banco de dados.")
 
 
-# TELA 8 - RELATÓRIO GERENCIAL (VERSÃO FINAL E FIEL)
+# TELA 8 - RELATÓRIO GERENCIAL (CORREÇÃO DE ERRO DE DATA)
 elif menu == "8. Relatório Gerencial":
     if verificar_senha():
         st.header("📊 Resumo de Ocupação por Dia")
         
-        # 1. Busca dados das duas tabelas
+        # 1. Busca dados
         dados_consultas = buscar_todos("CONSULTAS")
         dados_medicos = buscar_todos("MEDICOS")
         
         if dados_consultas:
             df = pd.DataFrame(dados_consultas)
-            # Define a data de hoje para os filtros de "Futuro"
+            # Ajuste para evitar o erro da foto: Garantir que a data seja comparável
             agora = dt_lib.datetime.now().date()
-            df['data_dt'] = pd.to_datetime(df['data_hora']).dt.date
             
-            # --- PARTE 1: RESUMO DIÁRIO COMPLETO ---
+            # --- PARTE 1: RESUMO DIÁRIO ---
+            df['data_dt'] = pd.to_datetime(df['data_hora']).dt.date
             resumo = df.groupby('data_dt').agg(
                 Total_Vagas=('id', 'count'),
                 Agendados=('status', lambda x: (x == 'Marcada').sum())
             ).reset_index()
             
-            # Ordena pela data real para a lógica funcionar
             resumo = resumo.sort_values('data_dt', ascending=False)
-            # Cria a coluna de exibição Brasil
             resumo['Data'] = resumo['data_dt'].apply(lambda x: x.strftime('%d/%m/%Y'))
             
-            # --- PARTE 2: MÉTRICAS E TABELA DE 7 DIAS (LADO A LADO) ---
-            c_met, c_tab = st.columns([1, 1])
+            st.write("### Ocupação Diária")
+            st.dataframe(resumo[['Data', 'Total_Vagas', 'Agendados']], use_container_width=True, hide_index=True)
             
-            with c_met:
-                st.subheader("Totais Gerais")
-                total_v = len(df)
-                total_a = len(df[df['status'] == 'Marcada'])
-                st.metric("Total Geral de Vagas", total_v)
-                st.metric("Total Geral Agendado", total_a)
-                
-            with c_tab:
-                st.subheader("Últimos 7 Dias")
-                # Pega as 7 linhas mais recentes do resumo
-                ultimos_7 = resumo[['Data', 'Agendados']].head(7)
-                st.table(ultimos_7)
-
-            # --- PARTE 3: MÉDICOS SEM GRADE FUTURA (CORREÇÃO POR ID) ---
+            # --- PARTE 2: MÉDICOS SEM GRADE FUTURA (CORRIGIDO) ---
             st.divider()
             st.subheader("⚠️ Médicos sem Grade Aberta (Futuro)")
             
             if dados_medicos:
                 df_meds = pd.DataFrame(dados_medicos)
-                # Filtra apenas o que é de hoje para frente
+                # Filtra apenas as consultas que são de hoje para frente
                 df_futuro = df[df['data_dt'] >= agora]
                 
-                # Cruza pelo ID do médico (Garante fidelidade total)
                 ids_com_grade = df_futuro['medico_id'].unique()
                 meds_sem_grade = df_meds[~df_meds['id'].isin(ids_com_grade)]
                 
                 if not meds_sem_grade.empty:
                     meds_sem_grade = meds_sem_grade.sort_values('nome')
-                    st.warning("Estes médicos não possuem horários futuros (Livres ou Marcados):")
+                    st.warning("Médicos cadastrados sem horários futuros:")
                     st.dataframe(
                         meds_sem_grade[['nome', 'especialidade', 'unidade']], 
                         use_container_width=True, 
                         hide_index=True
                     )
                 else:
-                    st.success("✅ Todos os médicos cadastrados possuem grades futuras.")
+                    st.success("✅ Todos os médicos possuem grades futuras.")
 
-            # --- PARTE 4: HISTÓRICO COMPLETO ---
+            # --- PARTE 3: MÉTRICAS GERAIS ---
             st.divider()
-            st.write("### Histórico de Ocupação por Dia")
-            st.dataframe(
-                resumo[['Data', 'Total_Vagas', 'Agendados']], 
-                use_container_width=True, 
-                hide_index=True
-            )
-        else:
-            st.info("Ainda não há dados para gerar o resumo.")
+            c1, c2 = st.columns(2)
+            c1.metric("Total Geral de Vagas", len(df))
+            c2.metric("Total Geral Agendado", len(df[df['status'] == 'Marcada']))
