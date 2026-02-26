@@ -167,27 +167,22 @@ elif menu == "3. Marcar Consulta":
 
 
 
-
-# TELA 4 - RELATÓRIO DE CONSULTAS FUTURAS (AGRUPADO POR UNIDADE/MÉDICO)
+# TELA 4 - RELATÓRIO DE CONSULTAS FUTURAS (ORDEM CRESCENTE POR DATA/HORA)
 elif menu == "4. Relatório de Agendamentos":
     if verificar_senha():
         st.header("📋 Controle de Confirmações")
         dados = buscar_todos("CONSULTAS", "*, MEDICOS(*)")
         if dados:
-            # Pega o horário atual sem fuso horário para comparação
             agora = dt_lib.datetime.now().replace(tzinfo=None)
             rel = []
             for r in dados:
                 m = r.get('MEDICOS') or r.get('medicos') or {}
-                # Converte a data da vaga para datetime nativo
                 dt_vaga = pd.to_datetime(r['data_hora']).replace(tzinfo=None)
                 
-                # Filtra apenas consultas Marcadas e que ainda vão acontecer
                 if dt_vaga >= agora and r['status'] == "Marcada":
                     pac = f"{r.get('paciente_nome','')} {r.get('paciente_sobrenome','')}".strip()
                     tel_limpo = ''.join(filter(str.isdigit, str(r.get('paciente_telefone', ''))))
                     
-                    # Mensagem padrão para o WhatsApp
                     msg = f"Olá, Gentileza Confirmar consulta Dr.(a) {m.get('nome')} / {m.get('especialidade')} / {dt_vaga.strftime('%d/%m/%Y %H:%M')} / {m.get('unidade')}"
                     link_zap = f"https://wa.me/55{tel_limpo}?text={msg.replace(' ', '%20')}" if tel_limpo else ""
                     
@@ -204,11 +199,9 @@ elif menu == "4. Relatório de Agendamentos":
             if rel:
                 df_r = pd.DataFrame(rel)
                 
-                # --- O PULO DO GATO: ORDENAÇÃO AGRUPADA ---
-                # Ordena primeiro por Unidade, depois por Médico, depois por Data
-                df_r = df_r.sort_values(by=['Unidade', 'Médico', 'Data/Hora'])
+                # --- AJUSTE DE ORDEM: DATA/HORA CRESCENTE PRIMEIRO ---
+                df_r = df_r.sort_values(by=['Data/Hora', 'Unidade', 'Médico'])
                 
-                # Exibição da Tabela com as configurações de coluna preservadas
                 st.data_editor(
                     df_r, 
                     column_config={
@@ -219,10 +212,8 @@ elif menu == "4. Relatório de Agendamentos":
                     use_container_width=True, 
                     hide_index=True
                 )
-                st.info("💡 A lista está agrupada por Unidade e Médico para facilitar as confirmações.")
             else:
                 st.info("Não há consultas marcadas para o futuro.")
-
 
 
 # TELA 5 - CANCELAR CONSULTA
