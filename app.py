@@ -241,18 +241,37 @@ elif menu == "6. Excluir Grade Aberta":
                 supabase.table("CONSULTAS").delete().in_("id", ids).execute()
                 st.success("Horários removidos!"); st.rerun()
 
-# TELA 7 - EXCLUIR CADASTRO MÉDICO
+
+# TELA 7 - EXCLUIR CADASTRO DE MÉDICO (CORRIGIDA COM BUSCA TOTAL)
 elif menu == "7. Excluir Cadastro de Médico":
     if verificar_senha():
-        st.header("👨‍⚕️ Remover Médico")
+        st.header("👨‍⚕️ Remover Cadastro de Médico")
+        
+        # AJUSTE FINO: Usando a função de paginação para garantir que busque TODOS os médicos
         meds = buscar_todos("MEDICOS")
+        
         if meds:
+            # Transformando em DataFrame para ordenar de A a Z por nome
             df_m = pd.DataFrame(meds).sort_values('nome')
-            op = {f"{r['nome']} ({r['especialidade']})": r['id'] for _, r in df_m.iterrows()}
-            sel = st.selectbox("Selecione o médico para remover o cadastro:", list(op.keys()))
-            if st.button("Excluir Médico"):
-                supabase.table("MEDICOS").delete().eq("id", op[sel]).execute()
-                st.success("Médico removido!"); st.rerun()
+            
+            # Criando o dicionário de opções para o seletor
+            op = {f"{r['nome']} ({r['especialidade']}) - {r['unidade']}": r['id'] for _, r in df_m.iterrows()}
+            
+            sel = st.selectbox("Escolha o médico para remover permanentemente:", list(op.keys()))
+            
+            st.warning(f"⚠️ Atenção: Ao excluir o cadastro de {sel}, você não poderá reverter esta ação.")
+            
+            if st.button("CONFIRMAR EXCLUSÃO PERMANENTE"):
+                try:
+                    supabase.table("MEDICOS").delete().eq("id", op[sel]).execute()
+                    st.success(f"O cadastro de {sel} foi removido com sucesso!")
+                    st.rerun()
+                except Exception as e:
+                    st.error(f"Erro ao excluir: {e}")
+        else:
+            st.info("Não foram encontrados médicos cadastrados no banco de dados.")
+
+
 
 # TELA 8 - GERENCIAL
 elif menu == "8. Relatório Gerencial":
