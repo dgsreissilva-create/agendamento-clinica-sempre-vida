@@ -307,21 +307,22 @@ elif menu == "7. Excluir Cadastro de Médico":
             st.info("Não foram encontrados médicos cadastrados no banco de dados.")
 
 
-
-# TELA 8 - RELATÓRIO GERENCIAL (MÉTRICAS + TABELA 7 DIAS LADO A LADO)
+# TELA 8 - RELATÓRIO GERENCIAL (CORREÇÃO DE ERRO DE DATA)
 elif menu == "8. Relatório Gerencial":
     if verificar_senha():
         st.header("📊 Resumo de Ocupação por Dia")
         
+        # 1. Busca dados
         dados_consultas = buscar_todos("CONSULTAS")
         dados_medicos = buscar_todos("MEDICOS")
         
         if dados_consultas:
             df = pd.DataFrame(dados_consultas)
+            # Ajuste para evitar o erro da foto: Garantir que a data seja comparável
             agora = dt_lib.datetime.now().date()
-            df['data_dt'] = pd.to_datetime(df['data_hora']).dt.date
             
-            # --- PARTE 1: RESUMO DIÁRIO COMPLETO ---
+            # --- PARTE 1: RESUMO DIÁRIO ---
+            df['data_dt'] = pd.to_datetime(df['data_hora']).dt.date
             resumo = df.groupby('data_dt').agg(
                 Total_Vagas=('id', 'count'),
                 Agendados=('status', lambda x: (x == 'Marcada').sum())
@@ -330,40 +331,34 @@ elif menu == "8. Relatório Gerencial":
             resumo = resumo.sort_values('data_dt', ascending=False)
             resumo['Data'] = resumo['data_dt'].apply(lambda x: x.strftime('%d/%m/%Y'))
             
-            # --- PARTE 2: MÉTRICAS E TABELA DE 7 DIAS (LADO A LADO) ---
-            c_met, c_tab = st.columns([1, 1])
+            st.write("### Ocupação Diária")
+            st.dataframe(resumo[['Data', 'Total_Vagas', 'Agendados']], use_container_width=True, hide_index=True)
             
-            with c_met:
-                st.subheader("Totais Gerais")
-                total_v = len(df) # Ex: 1793 conforme sua foto
-                total_a = len(df[df['status'] == 'Marcada']) # Ex: 77 conforme sua foto
-                st.metric("Total Geral de Vagas", total_v)
-                st.metric("Total Geral Agendado", total_a)
-                
-            with c_tab:
-                st.subheader("Últimos 7 Dias")
-                # Filtra os últimos 7 registros de datas com agendamentos
-                ultimos_7 = resumo[['Data', 'Agendados']].head(7)
-                st.table(ultimos_7) # Tabela estática para conferência rápida
-
-            # --- PARTE 3: MÉDICOS SEM GRADE (PRESERVADO) ---
+            # --- PARTE 2: MÉDICOS SEM GRADE FUTURA (CORRIGIDO) ---
             st.divider()
             st.subheader("⚠️ Médicos sem Grade Aberta (Futuro)")
+            
             if dados_medicos:
                 df_meds = pd.DataFrame(dados_medicos)
+                # Filtra apenas as consultas que são de hoje para frente
                 df_futuro = df[df['data_dt'] >= agora]
+                
                 ids_com_grade = df_futuro['medico_id'].unique()
                 meds_sem_grade = df_meds[~df_meds['id'].isin(ids_com_grade)]
                 
                 if not meds_sem_grade.empty:
+                    meds_sem_grade = meds_sem_grade.sort_values('nome')
                     st.warning("Médicos cadastrados sem horários futuros:")
-                    st.dataframe(meds_sem_grade[['nome', 'especialidade', 'unidade']], use_container_width=True, hide_index=True)
+                    st.dataframe(
+                        meds_sem_grade[['nome', 'especialidade', 'unidade']], 
+                        use_container_width=True, 
+                        hide_index=True
+                    )
                 else:
                     st.success("✅ Todos os médicos possuem grades futuras.")
 
-            # --- PARTE 4: OCUPAÇÃO DIÁRIA COMPLETA ---
+            # --- PARTE 3: MÉTRICAS GERAIS ---
             st.divider()
-            st.write("### Histórico Completo de Ocupação")
-            st.dataframe(resumo[['Data', 'Total_Vagas', 'Agendados']], use_container_width=True, hide_index=True)
-        else:
-            st.info("Ainda não há dados para gerar o resumo.")
+            c1, c2 = st.columns(2)
+            c1.metric("Total Geral de Vagas", len(df))
+            c2.metric("Total Geral Agendado", len(df[df['status'] == 'Marcada']))
