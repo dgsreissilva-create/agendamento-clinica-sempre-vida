@@ -273,34 +273,33 @@ elif menu == "7. Excluir Cadastro de Médico":
 
 
 
-# TELA 8 - GERENCIAL (AJUSTE FINO: ORDEM CRONOLÓGICA BRASIL)
+# TELA 8 - RELATÓRIO GERENCIAL (CORREÇÃO DE ORDEM CRONOLÓGICA)
 elif menu == "8. Relatório Gerencial":
     if verificar_senha():
         st.header("📊 Resumo de Ocupação por Dia")
         
-        # Busca todos os agendamentos para o cálculo
+        # 1. Busca todos os dados do banco
         dados = buscar_todos("CONSULTAS")
         
         if dados:
             df = pd.DataFrame(dados)
             
-            # 1. Tratamento das datas
-            df['data_dt'] = pd.to_datetime(df['data_hora'])
-            df['Dia'] = df['data_dt'].dt.date # Data pura para agrupamento e ordem
+            # 2. Converte a coluna data_hora para o formato de data real do Python
+            df['data_dt'] = pd.to_datetime(df['data_hora']).dt.date
             
-            # 2. Agrupamento e contagem
-            resumo = df.groupby('Dia').agg(
+            # 3. Agrupa os dados por essa data real
+            resumo = df.groupby('data_dt').agg(
                 Total_Vagas=('id', 'count'),
                 Agendados=('status', lambda x: (x == 'Marcada').sum())
             ).reset_index()
             
-            # 3. Ordenação (do dia mais recente para o mais antigo)
-            resumo = resumo.sort_values('Dia', ascending=False)
+            # 4. ORDENAÇÃO CRÍTICA: Ordena pela data real (do mais recente para o antigo)
+            resumo = resumo.sort_values('data_dt', ascending=False)
             
-            # 4. Formatação para exibição Brasil
-            resumo['Data'] = resumo['Dia'].apply(lambda x: x.strftime('%d/%m/%Y'))
+            # 5. FORMATAÇÃO VISUAL: Cria a coluna Brasil apenas para exibição
+            resumo['Data'] = resumo['data_dt'].apply(lambda x: x.strftime('%d/%m/%Y'))
             
-            # 5. Exibição da Tabela
+            # 6. Exibe a tabela usando a coluna 'Data' formatada, mas mantendo a ordem da 'data_dt'
             st.write("### Ocupação Diária")
             st.dataframe(
                 resumo[['Data', 'Total_Vagas', 'Agendados']], 
@@ -308,7 +307,7 @@ elif menu == "8. Relatório Gerencial":
                 hide_index=True
             )
             
-            # 6. Indicadores Gerais (Cards)
+            # 7. Indicadores rápidos (Cards)
             st.divider()
             c1, c2, c3 = st.columns(3)
             total_v = len(df)
@@ -319,4 +318,4 @@ elif menu == "8. Relatório Gerencial":
             c2.metric("Total Geral Agendado", total_a)
             c3.metric("Taxa de Ocupação", f"{taxa:.1f}%")
         else:
-            st.info("Ainda não há dados de consultas para gerar o resumo.")
+            st.info("Ainda não há dados para gerar o resumo.")
