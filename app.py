@@ -11,9 +11,7 @@ supabase = create_client(url, key)
 st.set_page_config(page_title="Clínica Sempre Vida", layout="wide")
 SENHA_ACESSO = "8484" 
 
-# ==============================
-# FUNÇÃO DE PAGINAÇÃO (BUSCAR TODOS)
-# ==============================
+# FUNÇÃO DE PAGINAÇÃO (CRÍTICA PARA VER MAIS DE 1000 REGISTROS)
 def buscar_todos(tabela, select_str="*", filtros=None):
     page_size = 1000
     offset = 0
@@ -21,8 +19,7 @@ def buscar_todos(tabela, select_str="*", filtros=None):
     while True:
         query = supabase.table(tabela).select(select_str).range(offset, offset + page_size - 1)
         if filtros:
-            for f in filtros:
-                query = query.eq(f[0], f[1])
+            for f in filtros: query = query.eq(f[0], f[1])
         res = query.execute()
         if not res.data: break
         dados.extend(res.data)
@@ -44,11 +41,10 @@ menu = st.sidebar.radio("Navegação", [
 ], index=2)
 
 def verificar_senha():
-    if "autenticado" not in st.session_state:
-        st.session_state["autenticado"] = False
+    if "autenticado" not in st.session_state: st.session_state["autenticado"] = False
     if not st.session_state["autenticado"]:
         st.subheader("🔒 Área Restrita")
-        senha_digitada = st.text_input("Senha Administrativa:", type="password")
+        senha_digitada = st.text_input("Senha Administrativa:", type="password", key="pwd_main")
         if st.button("Liberar Acesso"):
             if senha_digitada == SENHA_ACESSO:
                 st.session_state["autenticado"] = True
@@ -59,7 +55,7 @@ def verificar_senha():
 
 # --- 3. LÓGICA DAS TELAS ---
 
-# TELA 1 - CADASTRO OK
+# TELA 1 - CADASTRO
 if menu == "1. Cadastro de Médicos":
     if verificar_senha():
         st.header("👨‍⚕️ Cadastro de Médicos")
@@ -71,19 +67,26 @@ if menu == "1. Cadastro de Médicos":
                 supabase.table("MEDICOS").insert({"nome": n.upper(), "especialidade": e, "unidade": u}).execute()
                 st.success("Médico Cadastrado!")
 
-# TELA 2 - ABERTURA (DATA BR E INTERVALO)
+# TELA 2 - ABERTURA (ATUALIZADA: FILTRO DE UNIDADE)
 elif menu == "2. Abertura de Agenda":
     if verificar_senha():
         st.header("🏪 Abertura de Agenda")
         medicos = buscar_todos("MEDICOS")
         if medicos:
-            op = {f"{m['nome']} ({m['especialidade']})": m['id'] for m in medicos}
-            sel = st.selectbox("Médico", list(op.keys()))
+            df_meds = pd.DataFrame(medicos)
+            # Campo de Unidade para filtrar médicos
+            u_filtro = st.selectbox("Selecione a Unidade para filtrar médicos:", sorted(df_meds['unidade'].unique().tolist()))
+            df_filtrado = df_meds[df_meds['unidade'] == u_filtro]
+            
+            op = {f"{m['nome']} ({m['especialidade']})": m['id'] for _, m in df_filtrado.iterrows()}
+            sel = st.selectbox("Médico Disponível nesta Unidade", list(op.keys()))
+            
             c1, c2, c3 = st.columns(3)
             d = c1.date_input("Data da Agenda", format="DD/MM/YYYY")
             hi = c2.time_input("Hora Início", value=dt_lib.time(8, 0))
             hf = c3.time_input("Hora Final", value=dt_lib.time(18, 0))
             inter = st.number_input("Intervalo (minutos)", 5, 120, 20)
+            
             if st.button("Gerar Grade"):
                 vagas = []
                 t, fim = dt_lib.datetime.combine(d, hi), dt_lib.datetime.combine(d, hf)
@@ -91,11 +94,11 @@ elif menu == "2. Abertura de Agenda":
                     vagas.append({"medico_id": op[sel], "data_hora": t.isoformat(), "status": "Livre"})
                     t += dt_lib.timedelta(minutes=inter)
                 supabase.table("CONSULTAS").insert(vagas).execute()
-                st.success(f"✅ {len(vagas)} horários criados!")
+                st.success(f"✅ Grade criada para {sel} na unidade {u_filtro}!")
 
-# TELA 3 - MARCAR CONSULTA (UNIDADE/MÉDICO)
+# TELA 3 - MARCAR CONSULTA (ATUALIZADA: CAMPO CONVÊNIO)
 elif menu == "3. Marcar Consulta":
-    st.header("📅 Agendamento")
+    st.header("📅 Agendamento de Consultas")
     dados = buscar_todos("CONSULTAS", "*, MEDICOS(*)", filtros=[("status", "Livre")])
     if dados:
         v_list = []
@@ -105,88 +108,70 @@ elif menu == "3. Marcar Consulta":
                 dt = pd.to_datetime(r['data_hora'])
                 v_list.append({'id': r['id'], 'unidade': m['unidade'], 'especialidade': m['especialidade'], 'medico': m['nome'], 'display': dt.strftime('%d/%m/%Y %H:%M'), 'sort': r['data_hora']})
         df = pd.DataFrame(v_list).sort_values('sort')
-        u_sel = st.selectbox("Selecione a Unidade", sorted(df['unidade'].unique()))
-        df_u = df[df['unidade'] == u_sel]
-        m_sel = st.selectbox("Selecione o Médico", sorted(df_u['medico'].unique()))
-        df_m = df_u[df_u['medico'] == m_sel]
-        h_sel = st.selectbox("Selecione o Horário", df_m['display'].tolist())
+        u_sel = st.selectbox("1. Escolha a Unidade", sorted(df['unidade'].unique()))
+        m_sel = st.selectbox("2. Escolha o Médico", sorted(df[df['unidade'] == u_sel]['medico'].unique()))
+        df_m = df[(df['unidade'] == u_sel) & (df['medico'] == m_sel)]
+        h_sel = st.selectbox("3. Escolha o Horário", df_m['display'].tolist())
         id_vaga = df_m[df_m['display'] == h_sel].iloc[0]['id']
-        with st.form("f_ag"):
-            pn, ps, pt = st.text_input("Nome"), st.text_input("Sobrenome"), st.text_input("WhatsApp")
-            if st.form_submit_button("Confirmar Agendamento"):
+        
+        with st.form("form_paciente"):
+            c1, c2 = st.columns(2)
+            pn = c1.text_input("Nome do Paciente")
+            ps = c1.text_input("Sobrenome")
+            pt = c2.text_input("WhatsApp (Ex: 31988887777)")
+            pc = c2.text_input("Convênio / Plano de Saúde") # CAMPO ADICIONADO
+            if st.form_submit_button("Finalizar Agendamento"):
                 if pn and pt:
-                    supabase.table("CONSULTAS").update({"paciente_nome": pn, "paciente_sobrenome": ps, "paciente_telefone": pt, "status": "Marcada"}).eq("id", id_vaga).execute()
-                    st.success("Agendado com Sucesso!"); st.rerun()
+                    supabase.table("CONSULTAS").update({
+                        "paciente_nome": pn, "paciente_sobrenome": ps, 
+                        "paciente_telefone": pt, "paciente_convenio": pc, 
+                        "status": "Marcada"
+                    }).eq("id", id_vaga).execute()
+                    st.success("✅ Consulta Agendada!"); st.rerun()
 
-# TELA 4 - RELATÓRIO INTELIGENTE
+# TELA 4 - RELATÓRIO (ATUALIZADA: MENSAGEM DE WHATSAPP COMPLETA)
 elif menu == "4. Relatório de Agendamentos":
     if verificar_senha():
-        st.header("📋 Relatório de Consultas")
+        st.header("📋 Relatório de Consultas Marcadas")
         dados = buscar_todos("CONSULTAS", "*, MEDICOS(*)")
         if dados:
-            agora = dt_lib.datetime.now()
+            agora = dt_lib.datetime.now().replace(tzinfo=None)
             rel = []
             for r in dados:
                 m = r.get('MEDICOS') or r.get('medicos') or {}
-                dt = pd.to_datetime(r['data_hora'])
-                if dt >= agora: # Somente para o futuro
+                dt = pd.to_datetime(r['data_hora']).replace(tzinfo=None)
+                if dt >= agora and r['status'] == "Marcada":
                     pac = f"{r.get('paciente_nome','')} {r.get('paciente_sobrenome','')}".strip()
                     tel = ''.join(filter(str.isdigit, str(r.get('paciente_telefone', ''))))
+                    # MENSAGEM SOLICITADA
                     msg = f"Olá, Gentileza Confirmar consulta Dr.(a) {m.get('nome')} / {m.get('especialidade')} / {dt.strftime('%d/%m/%Y %H:%M')} / {m.get('unidade')}"
                     link = f"https://wa.me/55{tel}?text={msg.replace(' ', '%20')}" if tel else None
-                    rel.append({"Unidade": m.get('unidade'), "Data/Hora": dt, "Médico": m.get('nome'), "Paciente": pac if pac else "LIVRE", "WhatsApp": link, "Status": r['status'], "sort": r['data_hora']})
-            df_r = pd.DataFrame(rel).sort_values(by=['Unidade', 'sort'])
-            st.data_editor(df_r.drop(columns=['sort']), column_config={"WhatsApp": st.column_config.LinkColumn("📱 Confirmar", display_text="Enviar 🟢"), "Data/Hora": st.column_config.DatetimeColumn(format="DD/MM/YYYY HH:mm")}, use_container_width=True, hide_index=True)
+                    rel.append({"Unidade": m.get('unidade'), "Data/Hora": dt, "Médico": m.get('nome'), "Paciente": pac, "WhatsApp": link, "Status": "MARCADO", "sort": r['data_hora']})
+            
+            if rel:
+                df_r = pd.DataFrame(rel).sort_values(by=['Unidade', 'sort'])
+                st.data_editor(df_r.drop(columns=['sort']), column_config={
+                    "WhatsApp": st.column_config.LinkColumn("📱 Confirmação", display_text="Enviar Mensagem 🟢"),
+                    "Data/Hora": st.column_config.DatetimeColumn(format="DD/MM/YYYY HH:mm")
+                }, use_container_width=True, hide_index=True)
+            else: st.info("Sem consultas marcadas para os próximos dias.")
 
-# TELA 5 - CANCELAR OK
-elif menu == "5. Cancelar Consulta":
-    if verificar_senha():
-        st.header("🚫 Cancelar Consulta")
-        dados = buscar_todos("CONSULTAS", filtros=[("status", "Marcada")])
-        if dados:
-            op = {f"{r['paciente_nome']} - {r['data_hora']}": r['id'] for r in dados}
-            sel = st.selectbox("Escolha o agendamento:", list(op.keys()))
-            if st.button("Confirmar Cancelamento"):
-                supabase.table("CONSULTAS").update({"status": "Livre", "paciente_nome": None, "paciente_telefone": None}).eq("id", op[sel]).execute()
-                st.success("Cancelada!"); st.rerun()
-
-# TELA 6 - EXCLUIR GRADE (NOME + DATA)
-elif menu == "6. Excluir Grade Aberta":
-    if verificar_senha():
-        st.header("🗑️ Excluir Horários")
-        dados = buscar_todos("CONSULTAS", "*, MEDICOS(*)", filtros=[("status", "Livre")])
-        if dados:
-            df_e = pd.DataFrame([{'id': r['id'], 'info': f"{r['MEDICOS']['nome']} | {pd.to_datetime(r['data_hora']).strftime('%d/%m/%Y %H:%M')}"} for r in dados])
-            sel = st.multiselect("Selecione os horários:", df_e['info'].tolist())
-            if st.button("Remover Selecionados"):
-                ids = df_e[df_e['info'].isin(sel)]['id'].tolist()
-                supabase.table("CONSULTAS").delete().in_("id", ids).execute()
-                st.success("Removido!"); st.rerun()
-
-# TELA 7 - EXCLUIR MÉDICO (ORDEM ALFABÉTICA)
-elif menu == "7. Excluir Cadastro de Médico":
-    if verificar_senha():
-        st.header("👨‍⚕️ Remover Cadastro")
-        meds = buscar_todos("MEDICOS")
-        if meds:
-            # Ordenação por ordem alfabética no nome
-            df_m = pd.DataFrame(meds).sort_values('nome')
-            op = {f"{r['nome']} ({r['especialidade']})": r['id'] for idx, r in df_m.iterrows()}
-            sel = st.selectbox("Escolha o médico:", list(op.keys()))
-            if st.button("EXCLUIR PERMANENTEMENTE"):
-                supabase.table("MEDICOS").delete().eq("id", op[sel]).execute()
-                st.success("Removido!"); st.rerun()
-
-# TELA 8 - GERENCIAL (VAGAS E AGENDADOS POR DIA)
+# TELA 8 - GERENCIAL (ATUALIZADA: DATA BRASIL)
 elif menu == "8. Relatório Gerencial":
     if verificar_senha():
-        st.header("📊 Resumo Gerencial")
+        st.header("📊 Resumo de Ocupação")
         dados = buscar_todos("CONSULTAS")
         if dados:
             df = pd.DataFrame(dados)
-            df['dia'] = pd.to_datetime(df['data_hora']).dt.date
-            resumo = df.groupby('dia').agg(Total_Vagas=('id', 'count'), Agendados=('status', lambda x: (x == 'Marcada').sum())).reset_index()
-            st.write("### Ocupação por Dia")
-            st.dataframe(resumo.sort_values('dia', ascending=False), use_container_width=True, hide_index=True)
-            st.metric("Total Geral de Vagas", len(df))
-            st.metric("Total Geral Agendado", len(df[df['status'] == 'Marcada']))
+            df['data_dt'] = pd.to_datetime(df['data_hora'])
+            df['Dia'] = df['data_dt'].dt.strftime('%d/%m/%Y') # DATA BRASIL
+            
+            resumo = df.groupby('Dia').agg(
+                Total_Vagas=('id', 'count'),
+                Agendados=('status', lambda x: (x == 'Marcada').sum())
+            ).reset_index()
+            
+            st.dataframe(resumo.sort_values('Dia', ascending=False), use_container_width=True, hide_index=True)
+            c1, c2 = st.columns(2)
+            c1.metric("Total Acumulado de Vagas", len(df))
+            c2.metric("Total Acumulado Agendado", len(df[df['status'] == 'Marcada']))
