@@ -307,7 +307,8 @@ elif menu == "7. Excluir Cadastro de Médico":
             st.info("Não foram encontrados médicos cadastrados no banco de dados.")
 
 
-# TELA 8 - RELATÓRIO GERENCIAL (AJUSTE: TABELA DE ÚLTIMOS 7 DIAS)
+
+# TELA 8 - RELATÓRIO GERENCIAL (MÉTRICAS + TABELA 7 DIAS LADO A LADO)
 elif menu == "8. Relatório Gerencial":
     if verificar_senha():
         st.header("📊 Resumo de Ocupação por Dia")
@@ -329,10 +330,23 @@ elif menu == "8. Relatório Gerencial":
             resumo = resumo.sort_values('data_dt', ascending=False)
             resumo['Data'] = resumo['data_dt'].apply(lambda x: x.strftime('%d/%m/%Y'))
             
-            st.write("### Ocupação Diária Completa")
-            st.dataframe(resumo[['Data', 'Total_Vagas', 'Agendados']], use_container_width=True, hide_index=True)
+            # --- PARTE 2: MÉTRICAS E TABELA DE 7 DIAS (LADO A LADO) ---
+            c_met, c_tab = st.columns([1, 1])
             
-            # --- PARTE 2: MÉDICOS SEM GRADE (PRESERVADO) ---
+            with c_met:
+                st.subheader("Totais Gerais")
+                total_v = len(df) # Ex: 1793 conforme sua foto
+                total_a = len(df[df['status'] == 'Marcada']) # Ex: 77 conforme sua foto
+                st.metric("Total Geral de Vagas", total_v)
+                st.metric("Total Geral Agendado", total_a)
+                
+            with c_tab:
+                st.subheader("Últimos 7 Dias")
+                # Filtra os últimos 7 registros de datas com agendamentos
+                ultimos_7 = resumo[['Data', 'Agendados']].head(7)
+                st.table(ultimos_7) # Tabela estática para conferência rápida
+
+            # --- PARTE 3: MÉDICOS SEM GRADE (PRESERVADO) ---
             st.divider()
             st.subheader("⚠️ Médicos sem Grade Aberta (Futuro)")
             if dados_medicos:
@@ -347,22 +361,9 @@ elif menu == "8. Relatório Gerencial":
                 else:
                     st.success("✅ Todos os médicos possuem grades futuras.")
 
-            # --- PARTE 3: MÉTRICAS E TABELA DE 7 DIAS (AJUSTE FINO) ---
+            # --- PARTE 4: OCUPAÇÃO DIÁRIA COMPLETA ---
             st.divider()
-            col_metricas, col_tabela = st.columns([1, 1])
-            
-            with col_metricas:
-                st.write("### Totais Gerais")
-                total_v = len(df)
-                total_a = len(df[df['status'] == 'Marcada'])
-                st.metric("Total Geral de Vagas", total_v)
-                st.metric("Total Geral Agendado", total_a)
-                
-            with col_tabela:
-                st.write("### Últimos 7 Dias")
-                # Pega apenas os últimos 7 dias com agendamentos
-                ultimos_7 = resumo[['Data', 'Agendados']].head(7)
-                st.table(ultimos_7) # Usei st.table para ficar estático e limpo conforme o exemplo
-
+            st.write("### Histórico Completo de Ocupação")
+            st.dataframe(resumo[['Data', 'Total_Vagas', 'Agendados']], use_container_width=True, hide_index=True)
         else:
             st.info("Ainda não há dados para gerar o resumo.")
