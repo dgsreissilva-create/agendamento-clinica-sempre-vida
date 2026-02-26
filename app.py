@@ -314,22 +314,24 @@ elif menu == "7. Excluir Cadastro de Médico":
 
 
 
-# TELA 8 - RELATÓRIO GERENCIAL (CORREÇÃO DE VALORES ONTEM/HOJE)
+# TELA 8 - RELATÓRIO GERENCIAL (FOCO: HOJE, ONTEM E ANTEONTEM)
 elif menu == "8. Relatório Gerencial":
     if verificar_senha():
         st.header("📊 Resumo de Ocupação por Dia")
         
-        # 1. Busca dados
         dados_consultas = buscar_todos("CONSULTAS")
         dados_medicos = buscar_todos("MEDICOS")
         
         if dados_consultas:
             df = pd.DataFrame(dados_consultas)
-            agora = dt_lib.datetime.now().date()
-            ontem = agora - dt_lib.timedelta(days=1)
+            # Definição das datas
+            hoje_dt = dt_lib.datetime.now().date()
+            ontem_dt = hoje_dt - dt_lib.timedelta(days=1)
+            ante_dt = hoje_dt - dt_lib.timedelta(days=2)
+            
+            df['data_dt'] = pd.to_datetime(df['data_hora']).dt.date
             
             # --- PARTE 1: RESUMO DIÁRIO ---
-            df['data_dt'] = pd.to_datetime(df['data_hora']).dt.date
             resumo = df.groupby('data_dt').agg(
                 Total_Vagas=('id', 'count'),
                 Agendados=('status', lambda x: (x == 'Marcada').sum())
@@ -344,36 +346,43 @@ elif menu == "8. Relatório Gerencial":
             # --- PARTE 2: MÉDICOS SEM GRADE FUTURA ---
             st.divider()
             st.subheader("⚠️ Médicos sem Grade Aberta (Futuro)")
-            
             if dados_medicos:
                 df_meds = pd.DataFrame(dados_medicos)
-                df_futuro = df[df['data_dt'] >= agora]
+                df_futuro = df[df['data_dt'] >= hoje_dt]
                 ids_com_grade = df_futuro['medico_id'].unique()
                 meds_sem_grade = df_meds[~df_meds['id'].isin(ids_com_grade)]
                 
                 if not meds_sem_grade.empty:
                     meds_sem_grade = meds_sem_grade.sort_values('nome')
-                    st.warning("Médicos cadastrados sem horários futuros:")
                     st.dataframe(meds_sem_grade[['nome', 'especialidade', 'unidade']], use_container_width=True, hide_index=True)
                 else:
                     st.success("✅ Todos os médicos possuem grades futuras.")
 
-            # --- PARTE 3: MÉTRICAS GERAIS E VALORES REAIS ---
+            # --- PARTE 3: INDICADORES ESPECÍFICOS (HOJE, ONTEM, ANTEONTEM) ---
             st.divider()
-            st.subheader("📈 Indicadores de Desempenho")
-            
-            # Totais Gerais
+            st.subheader("📈 Comparativo de Desempenho")
+
+            # Função auxiliar para pegar valores com segurança
+            def get_val(data, coluna):
+                filtro = resumo[resumo['data_dt'] == data]
+                return int(filtro[coluna].sum()) if not filtro.empty else 0
+
+            # Linha de Agendados (Pacientes)
+            st.write("**Pacientes Agendados:**")
+            a1, a2, a3 = st.columns(3)
+            a1.metric(f"Hoje ({hoje_dt.strftime('%d/%m')})", get_val(hoje_dt, 'Agendados'))
+            a2.metric(f"Ontem ({ontem_dt.strftime('%d/%m')})", get_val(ontem_dt, 'Agendados'))
+            a3.metric(f"Anteontem ({ante_dt.strftime('%d/%m')})", get_val(ante_dt, 'Agendados'))
+
+            # Linha de Grades (Vagas Totais)
+            st.write("**Grades Abertas (Total):**")
+            g1, g2, g3 = st.columns(3)
+            g1.metric(f"Hoje ({hoje_dt.strftime('%d/%m')})", get_val(hoje_dt, 'Total_Vagas'))
+            g2.metric(f"Ontem ({ontem_dt.strftime('%d/%m')})", get_val(ontem_dt, 'Total_Vagas'))
+            g3.metric(f"Anteontem ({ante_dt.strftime('%d/%m')})", get_val(ante_dt, 'Total_Vagas'))
+
+            # Totais Gerais (Preservados)
+            st.divider()
             c1, c2 = st.columns(2)
             c1.metric("Total Geral de Vagas", len(df))
             c2.metric("Total Geral Agendado", len(df[df['status'] == 'Marcada']))
-            
-            # Valores Específicos (Conforme seu pedido: Ontem e Hoje)
-            c3, c4 = st.columns(2)
-            
-            # Busca agendados de Hoje (26/02)
-            hoje_val = resumo[resumo['data_dt'] == agora]['Agendados'].sum()
-            c3.metric(f"Agendados Hoje ({agora.strftime('%d/%m')})", int(hoje_val))
-            
-            # Busca agendados de Ontem (25/02)
-            ontem_val = resumo[resumo['data_dt'] == ontem]['Agendados'].sum()
-            c4.metric(f"Agendados Ontem ({ontem.strftime('%d/%m')})", int(ontem_val))
