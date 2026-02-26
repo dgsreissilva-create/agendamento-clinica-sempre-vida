@@ -273,13 +273,50 @@ elif menu == "7. Excluir Cadastro de Médico":
 
 
 
-# TELA 8 - GERENCIAL
+# TELA 8 - GERENCIAL (AJUSTE FINO: ORDEM CRONOLÓGICA BRASIL)
 elif menu == "8. Relatório Gerencial":
     if verificar_senha():
-        st.header("📊 Resumo Gerencial")
+        st.header("📊 Resumo de Ocupação por Dia")
+        
+        # Busca todos os agendamentos para o cálculo
         dados = buscar_todos("CONSULTAS")
+        
         if dados:
             df = pd.DataFrame(dados)
-            df['Dia'] = pd.to_datetime(df['data_hora']).dt.strftime('%d/%m/%Y')
-            resumo = df.groupby('Dia').agg(Total_Vagas=('id', 'count'), Agendados=('status', lambda x: (x == 'Marcada').sum())).reset_index()
-            st.dataframe(resumo.sort_values('Dia', ascending=False), use_container_width=True, hide_index=True)
+            
+            # 1. Tratamento das datas
+            df['data_dt'] = pd.to_datetime(df['data_hora'])
+            df['Dia'] = df['data_dt'].dt.date # Data pura para agrupamento e ordem
+            
+            # 2. Agrupamento e contagem
+            resumo = df.groupby('Dia').agg(
+                Total_Vagas=('id', 'count'),
+                Agendados=('status', lambda x: (x == 'Marcada').sum())
+            ).reset_index()
+            
+            # 3. Ordenação (do dia mais recente para o mais antigo)
+            resumo = resumo.sort_values('Dia', ascending=False)
+            
+            # 4. Formatação para exibição Brasil
+            resumo['Data'] = resumo['Dia'].apply(lambda x: x.strftime('%d/%m/%Y'))
+            
+            # 5. Exibição da Tabela
+            st.write("### Ocupação Diária")
+            st.dataframe(
+                resumo[['Data', 'Total_Vagas', 'Agendados']], 
+                use_container_width=True, 
+                hide_index=True
+            )
+            
+            # 6. Indicadores Gerais (Cards)
+            st.divider()
+            c1, c2, c3 = st.columns(3)
+            total_v = len(df)
+            total_a = len(df[df['status'] == 'Marcada'])
+            taxa = (total_a / total_v * 100) if total_v > 0 else 0
+            
+            c1.metric("Total Geral de Vagas", total_v)
+            c2.metric("Total Geral Agendado", total_a)
+            c3.metric("Taxa de Ocupação", f"{taxa:.1f}%")
+        else:
+            st.info("Ainda não há dados de consultas para gerar o resumo.")
