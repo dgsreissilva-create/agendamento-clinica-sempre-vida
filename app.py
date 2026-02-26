@@ -167,7 +167,7 @@ elif menu == "3. Marcar Consulta":
 
 
 
-# TELA 4 - RELATÓRIO DE CONSULTAS FUTURAS (AGRUPADO POR MÉDICO POR DIA)
+# TELA 4 - RELATÓRIO DE CONSULTAS FUTURAS (UNIDADE > DATA > MÉDICO)
 elif menu == "4. Relatório de Agendamentos":
     if verificar_senha():
         st.header("📋 Controle de Confirmações")
@@ -179,39 +179,35 @@ elif menu == "4. Relatório de Agendamentos":
                 m = r.get('MEDICOS') or r.get('medicos') or {}
                 dt_vaga = pd.to_datetime(r['data_hora']).replace(tzinfo=None)
                 
-                # Filtra apenas Marcadas e Futuras
                 if dt_vaga >= agora and r['status'] == "Marcada":
                     pac = f"{r.get('paciente_nome','')} {r.get('paciente_sobrenome','')}".strip()
                     tel_limpo = ''.join(filter(str.isdigit, str(r.get('paciente_telefone', ''))))
                     
-                    # Mensagem personalizada
                     msg = f"Olá, Gentileza Confirmar consulta Dr.(a) {m.get('nome')} / {m.get('especialidade')} / {dt_vaga.strftime('%d/%m/%Y %H:%M')} / {m.get('unidade')}"
                     link_zap = f"https://wa.me/55{tel_limpo}?text={msg.replace(' ', '%20')}" if tel_limpo else ""
                     
+                    # Ordem exata dos dados para as colunas
                     rel.append({
-                        "Data_Pura": dt_vaga.date(), # Para agrupar o dia
-                        "Médico": m.get('nome'),
-                        "Data/Hora": dt_vaga,
                         "Unidade": m.get('unidade'),
+                        "Data/Hora": dt_vaga,
+                        "Médico": m.get('nome'),
                         "Paciente": pac,
                         "Telefone": r.get('paciente_telefone'),
                         "WhatsApp Link": link_zap,
-                        "Confirmado?": False
+                        "Confirmado?": False,
+                        "Data_Pura": dt_vaga.date() # Auxiliar para ordenação
                     })
             
             if rel:
                 df_r = pd.DataFrame(rel)
                 
-                # --- ORDENAÇÃO SOLICITADA ---
-                # 1. Data do dia (Crescente)
-                # 2. Nome do Médico (Agrupa todos os pacientes dele)
-                # 3. Hora exata (Crescente)
-                df_r = df_r.sort_values(by=['Data_Pura', 'Médico', 'Data/Hora'])
+                # ORDENAÇÃO: Por Unidade, depois pelo Dia, depois pelo Médico
+                df_r = df_r.sort_values(by=['Unidade', 'Data_Pura', 'Médico', 'Data/Hora'])
                 
-                # Removemos a coluna auxiliar 'Data_Pura' antes de mostrar
-                df_final = df_r.drop(columns=['Data_Pura'])
+                # Seleciona e organiza as colunas na ordem que você pediu
+                colunas_ordenadas = ["Unidade", "Data/Hora", "Médico", "Paciente", "Telefone", "WhatsApp Link", "Confirmado?"]
+                df_final = df_r[colunas_ordenadas]
                 
-                # Exibição
                 st.data_editor(
                     df_final, 
                     column_config={
@@ -224,6 +220,7 @@ elif menu == "4. Relatório de Agendamentos":
                 )
             else:
                 st.info("Não há consultas marcadas para o futuro.")
+
 
 # TELA 5 - CANCELAR CONSULTA
 elif menu == "5. Cancelar Consulta":
