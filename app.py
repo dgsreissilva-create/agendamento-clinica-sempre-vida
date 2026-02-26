@@ -313,26 +313,23 @@ elif menu == "7. Excluir Cadastro de Médico":
             st.info("Não foram encontrados médicos cadastrados no banco de dados.")
 
 
-# TELA 8 - RELATÓRIO GERENCIAL (CORREÇÃO DEFINITIVA DE DATA/FUSO)
+
+# TELA 8 - RELATÓRIO GERENCIAL (CORREÇÃO DE VALORES ONTEM/HOJE)
 elif menu == "8. Relatório Gerencial":
     if verificar_senha():
         st.header("📊 Resumo de Ocupação por Dia")
         
+        # 1. Busca dados
         dados_consultas = buscar_todos("CONSULTAS")
         dados_medicos = buscar_todos("MEDICOS")
         
         if dados_consultas:
             df = pd.DataFrame(dados_consultas)
-            
-            # --- CORREÇÃO DE FUSO HORÁRIO ---
-            # Converte para data real, ajustando para o fuso do Brasil (-3h) se necessário
-            df['data_dt'] = pd.to_datetime(df['data_hora']).dt.tz_convert('America/Sao_Paulo').dt.date
-            
-            # Data de hoje e ontem baseada no fuso Brasil
-            agora = dt_lib.datetime.now(dt_lib.timezone(dt_lib.timedelta(hours=-3))).date()
+            agora = dt_lib.datetime.now().date()
             ontem = agora - dt_lib.timedelta(days=1)
             
             # --- PARTE 1: RESUMO DIÁRIO ---
+            df['data_dt'] = pd.to_datetime(df['data_hora']).dt.date
             resumo = df.groupby('data_dt').agg(
                 Total_Vagas=('id', 'count'),
                 Agendados=('status', lambda x: (x == 'Marcada').sum())
@@ -344,21 +341,39 @@ elif menu == "8. Relatório Gerencial":
             st.write("### Ocupação Diária")
             st.dataframe(resumo[['Data', 'Total_Vagas', 'Agendados']], use_container_width=True, hide_index=True)
             
-            # ... (Mantenha a Parte 2 dos Médicos sem Grade como está) ...
-
-            # --- PARTE 3: MÉTRICAS COM VALORES CORRIGIDOS ---
+            # --- PARTE 2: MÉDICOS SEM GRADE FUTURA ---
             st.divider()
-            st.subheader("📈 Indicadores de Desempenho (Horário Brasília)")
+            st.subheader("⚠️ Médicos sem Grade Aberta (Futuro)")
             
+            if dados_medicos:
+                df_meds = pd.DataFrame(dados_medicos)
+                df_futuro = df[df['data_dt'] >= agora]
+                ids_com_grade = df_futuro['medico_id'].unique()
+                meds_sem_grade = df_meds[~df_meds['id'].isin(ids_com_grade)]
+                
+                if not meds_sem_grade.empty:
+                    meds_sem_grade = meds_sem_grade.sort_values('nome')
+                    st.warning("Médicos cadastrados sem horários futuros:")
+                    st.dataframe(meds_sem_grade[['nome', 'especialidade', 'unidade']], use_container_width=True, hide_index=True)
+                else:
+                    st.success("✅ Todos os médicos possuem grades futuras.")
+
+            # --- PARTE 3: MÉTRICAS GERAIS E VALORES REAIS ---
+            st.divider()
+            st.subheader("📈 Indicadores de Desempenho")
+            
+            # Totais Gerais
             c1, c2 = st.columns(2)
             c1.metric("Total Geral de Vagas", len(df))
             c2.metric("Total Geral Agendado", len(df[df['status'] == 'Marcada']))
             
+            # Valores Específicos (Conforme seu pedido: Ontem e Hoje)
             c3, c4 = st.columns(2)
             
-            # Busca agendados filtrando exatamente pela data ajustada
-            val_hoje = resumo[resumo['data_dt'] == agora]['Agendados'].sum()
-            val_ontem = resumo[resumo['data_dt'] == ontem]['Agendados'].sum()
+            # Busca agendados de Hoje (26/02)
+            hoje_val = resumo[resumo['data_dt'] == agora]['Agendados'].sum()
+            c3.metric(f"Agendados Hoje ({agora.strftime('%d/%m')})", int(hoje_val))
             
-            c3.metric(f"Agendados Hoje ({agora.strftime('%d/%m')})", int(val_hoje))
-            c4.metric(f"Agendados Ontem ({ontem.strftime('%d/%m')})", int(val_ontem))
+            # Busca agendados de Ontem (25/02)
+            ontem_val = resumo[resumo['data_dt'] == ontem]['Agendados'].sum()
+            c4.metric(f"Agendados Ontem ({ontem.strftime('%d/%m')})", int(ontem_val))
