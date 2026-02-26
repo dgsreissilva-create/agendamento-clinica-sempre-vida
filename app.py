@@ -307,19 +307,19 @@ elif menu == "7. Excluir Cadastro de Médico":
             st.info("Não foram encontrados médicos cadastrados no banco de dados.")
 
 
-
-# TELA 8 - RELATÓRIO GERENCIAL (AJUSTE: MÉDICOS SEM GRADE FUTURA)
+# TELA 8 - RELATÓRIO GERENCIAL (CORREÇÃO DE ERRO DE DATA)
 elif menu == "8. Relatório Gerencial":
     if verificar_senha():
         st.header("📊 Resumo de Ocupação por Dia")
         
-        # 1. Busca dados das consultas e dos médicos
+        # 1. Busca dados
         dados_consultas = buscar_todos("CONSULTAS")
         dados_medicos = buscar_todos("MEDICOS")
         
         if dados_consultas:
             df = pd.DataFrame(dados_consultas)
-            agora = dt_lib.datetime.now().replace(tzinfo=None)
+            # Ajuste para evitar o erro da foto: Garantir que a data seja comparável
+            agora = dt_lib.datetime.now().date()
             
             # --- PARTE 1: RESUMO DIÁRIO ---
             df['data_dt'] = pd.to_datetime(df['data_hora']).dt.date
@@ -334,37 +334,31 @@ elif menu == "8. Relatório Gerencial":
             st.write("### Ocupação Diária")
             st.dataframe(resumo[['Data', 'Total_Vagas', 'Agendados']], use_container_width=True, hide_index=True)
             
-            # --- PARTE 2: MÉDICOS SEM GRADE FUTURA ---
+            # --- PARTE 2: MÉDICOS SEM GRADE FUTURA (CORRIGIDO) ---
             st.divider()
             st.subheader("⚠️ Médicos sem Grade Aberta (Futuro)")
             
             if dados_medicos:
                 df_meds = pd.DataFrame(dados_medicos)
-                # Filtra apenas as consultas que são para o futuro
-                df_futuro = df[pd.to_datetime(df['data_hora']).dt.replace(tzinfo=None) >= agora]
+                # Filtra apenas as consultas que são de hoje para frente
+                df_futuro = df[df['data_dt'] >= agora]
                 
-                # Pega os IDs dos médicos que possuem alguma vaga no futuro
                 ids_com_grade = df_futuro['medico_id'].unique()
-                
-                # Médicos que NÃO estão na lista de IDs com grade futura
                 meds_sem_grade = df_meds[~df_meds['id'].isin(ids_com_grade)]
                 
                 if not meds_sem_grade.empty:
-                    # Ordenar por nome para facilitar
                     meds_sem_grade = meds_sem_grade.sort_values('nome')
-                    st.warning("Os médicos abaixo estão cadastrados, mas não possuem horários abertos para os próximos dias:")
-                    
-                    # Exibe uma tabela simples com Nome e Unidade
+                    st.warning("Médicos cadastrados sem horários futuros:")
                     st.dataframe(
                         meds_sem_grade[['nome', 'especialidade', 'unidade']], 
                         use_container_width=True, 
                         hide_index=True
                     )
                 else:
-                    st.success("✅ Todos os médicos cadastrados possuem grades futuras abertas.")
+                    st.success("✅ Todos os médicos possuem grades futuras.")
 
             # --- PARTE 3: MÉTRICAS GERAIS ---
             st.divider()
             c1, c2 = st.columns(2)
-            c1.metric("Total Geral de Vagas (Sistema)", len(df))
+            c1.metric("Total Geral de Vagas", len(df))
             c2.metric("Total Geral Agendado", len(df[df['status'] == 'Marcada']))
