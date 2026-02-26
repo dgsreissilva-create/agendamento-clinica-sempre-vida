@@ -273,33 +273,33 @@ elif menu == "7. Excluir Cadastro de Médico":
 
 
 
-# TELA 8 - RELATÓRIO GERENCIAL (CORREÇÃO DE ORDEM CRONOLÓGICA)
+# TELA 8 - RELATÓRIO GERENCIAL (CORREÇÃO DE ORDEM E TABELA DIÁRIA)
 elif menu == "8. Relatório Gerencial":
     if verificar_senha():
         st.header("📊 Resumo de Ocupação por Dia")
         
-        # 1. Busca todos os dados do banco
+        # 1. Busca todos os dados usando a função de paginação para não perder nada
         dados = buscar_todos("CONSULTAS")
         
         if dados:
             df = pd.DataFrame(dados)
             
-            # 2. Converte a coluna data_hora para o formato de data real do Python
+            # 2. Converte para data real (sem hora) para agrupamento correto
             df['data_dt'] = pd.to_datetime(df['data_hora']).dt.date
             
-            # 3. Agrupa os dados por essa data real
+            # 3. Agrupamento Diário: Total de Vagas vs Agendados
             resumo = df.groupby('data_dt').agg(
                 Total_Vagas=('id', 'count'),
                 Agendados=('status', lambda x: (x == 'Marcada').sum())
             ).reset_index()
             
-            # 4. ORDENAÇÃO CRÍTICA: Ordena pela data real (do mais recente para o antigo)
+            # 4. ORDENAÇÃO CRÍTICA: Ordena pela data real (Mais recente no topo)
             resumo = resumo.sort_values('data_dt', ascending=False)
             
-            # 5. FORMATAÇÃO VISUAL: Cria a coluna Brasil apenas para exibição
+            # 5. FORMATAÇÃO BRASIL: Cria a coluna de exibição após a ordenação
             resumo['Data'] = resumo['data_dt'].apply(lambda x: x.strftime('%d/%m/%Y'))
             
-            # 6. Exibe a tabela usando a coluna 'Data' formatada, mas mantendo a ordem da 'data_dt'
+            # 6. Exibição da Tabela Diária
             st.write("### Ocupação Diária")
             st.dataframe(
                 resumo[['Data', 'Total_Vagas', 'Agendados']], 
@@ -307,15 +307,10 @@ elif menu == "8. Relatório Gerencial":
                 hide_index=True
             )
             
-            # 7. Indicadores rápidos (Cards)
+            # 7. Métricas Gerais (Cards)
             st.divider()
-            c1, c2, c3 = st.columns(3)
-            total_v = len(df)
-            total_a = len(df[df['status'] == 'Marcada'])
-            taxa = (total_a / total_v * 100) if total_v > 0 else 0
-            
-            c1.metric("Total Geral de Vagas", total_v)
-            c2.metric("Total Geral Agendado", total_a)
-            c3.metric("Taxa de Ocupação", f"{taxa:.1f}%")
+            c1, c2 = st.columns(2)
+            c1.metric("Total Geral de Vagas", len(df))
+            c2.metric("Total Geral Agendado", len(df[df['status'] == 'Marcada']))
         else:
-            st.info("Ainda não há dados para gerar o resumo.")
+            st.info("Sem dados para gerar o relatório.")
