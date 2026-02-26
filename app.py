@@ -164,10 +164,12 @@ elif menu == "3. Marcar Consulta":
                     supabase.table("CONSULTAS").update({"paciente_nome": pn, "paciente_sobrenome": ps, "paciente_telefone": pt, "paciente_convenio": pc, "status": "Marcada"}).eq("id", id_vaga).execute()
                     st.success("✅ Agendada!"); st.rerun()
 
-# TELA 4 - RELATÓRIO (MENSAGEM WHATSAPP)
+
+
+# TELA 4 - RELATÓRIO DE CONSULTAS FUTURAS (AJUSTE FINO)
 elif menu == "4. Relatório de Agendamentos":
     if verificar_senha():
-        st.header("📋 Relatório de Consultas Futuras")
+        st.header("📋 Controle de Confirmações")
         dados = buscar_todos("CONSULTAS", "*, MEDICOS(*)")
         if dados:
             agora = dt_lib.datetime.now().replace(tzinfo=None)
@@ -175,15 +177,44 @@ elif menu == "4. Relatório de Agendamentos":
             for r in dados:
                 m = r.get('MEDICOS') or r.get('medicos') or {}
                 dt = pd.to_datetime(r['data_hora']).replace(tzinfo=None)
+                
+                # Filtra apenas Marcadas e Futuras
                 if dt >= agora and r['status'] == "Marcada":
                     pac = f"{r.get('paciente_nome','')} {r.get('paciente_sobrenome','')}".strip()
                     tel = ''.join(filter(str.isdigit, str(r.get('paciente_telefone', ''))))
+                    
+                    # Mensagem personalizada
                     msg = f"Olá, Gentileza Confirmar consulta Dr.(a) {m.get('nome')} / {m.get('especialidade')} / {dt.strftime('%d/%m/%Y %H:%M')} / {m.get('unidade')}"
-                    link = f"https://wa.me/55{tel}?text={msg.replace(' ', '%20')}" if tel else None
-                    rel.append({"Unidade": m.get('unidade'), "Data/Hora": dt, "Médico": m.get('nome'), "Paciente": pac, "WhatsApp": link, "Status": "MARCADO", "sort": r['data_hora']})
+                    link = f"https://wa.me/55{tel}?text={msg.replace(' ', '%20')}" if tel else ""
+                    
+                    rel.append({
+                        "Unidade": m.get('unidade'),
+                        "Data/Hora": dt,
+                        "Médico": m.get('nome'),
+                        "Paciente": pac,
+                        "WhatsApp (Clique)": link,
+                        "Confirmado?": False, # Coluna em branco para você marcar
+                        "sort": r['data_hora']
+                    })
+            
             if rel:
                 df_r = pd.DataFrame(rel).sort_values(by=['Unidade', 'sort'])
-                st.data_editor(df_r.drop(columns=['sort']), column_config={"WhatsApp": st.column_config.LinkColumn("📱 Confirmação", display_text="Enviar 🟢"), "Data/Hora": st.column_config.DatetimeColumn(format="DD/MM/YYYY HH:mm")}, use_container_width=True, hide_index=True)
+                
+                # Exibe a tabela com editor para permitir marcar o check
+                st.data_editor(
+                    df_r.drop(columns=['sort']), 
+                    column_config={
+                        "WhatsApp (Clique)": st.column_config.LinkColumn("📱 Enviar Zap", display_text=None), # Mostra o link/número direto
+                        "Data/Hora": st.column_config.DatetimeColumn(format="DD/MM/YYYY HH:mm"),
+                        "Confirmado?": st.column_config.CheckboxColumn("✅ Marcar ao Enviar", default=False)
+                    }, 
+                    use_container_width=True, 
+                    hide_index=True
+                )
+                st.info("💡 Dica: Clique no número para abrir o WhatsApp e depois marque o check ao lado.")
+            else:
+                st.info("Não há consultas marcadas para o futuro.")
+
 
 # TELA 5 - CANCELAR CONSULTA
 elif menu == "5. Cancelar Consulta":
