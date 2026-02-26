@@ -167,54 +167,63 @@ elif menu == "3. Marcar Consulta":
 
 
 
-# TELA 4 - RELATÓRIO DE CONSULTAS FUTURAS (AJUSTE FINO)
+
+# TELA 4 - RELATÓRIO DE CONSULTAS FUTURAS (AGRUPADO POR UNIDADE/MÉDICO)
 elif menu == "4. Relatório de Agendamentos":
     if verificar_senha():
         st.header("📋 Controle de Confirmações")
         dados = buscar_todos("CONSULTAS", "*, MEDICOS(*)")
         if dados:
+            # Pega o horário atual sem fuso horário para comparação
             agora = dt_lib.datetime.now().replace(tzinfo=None)
             rel = []
             for r in dados:
                 m = r.get('MEDICOS') or r.get('medicos') or {}
-                dt = pd.to_datetime(r['data_hora']).replace(tzinfo=None)
+                # Converte a data da vaga para datetime nativo
+                dt_vaga = pd.to_datetime(r['data_hora']).replace(tzinfo=None)
                 
-                # Filtra apenas Marcadas e Futuras
-                if dt >= agora and r['status'] == "Marcada":
+                # Filtra apenas consultas Marcadas e que ainda vão acontecer
+                if dt_vaga >= agora and r['status'] == "Marcada":
                     pac = f"{r.get('paciente_nome','')} {r.get('paciente_sobrenome','')}".strip()
                     tel_limpo = ''.join(filter(str.isdigit, str(r.get('paciente_telefone', ''))))
                     
-                    # Mensagem personalizada
-                    msg = f"Olá, Gentileza Confirmar consulta Dr.(a) {m.get('nome')} / {m.get('especialidade')} / {dt.strftime('%d/%m/%Y %H:%M')} / {m.get('unidade')}"
+                    # Mensagem padrão para o WhatsApp
+                    msg = f"Olá, Gentileza Confirmar consulta Dr.(a) {m.get('nome')} / {m.get('especialidade')} / {dt_vaga.strftime('%d/%m/%Y %H:%M')} / {m.get('unidade')}"
                     link_zap = f"https://wa.me/55{tel_limpo}?text={msg.replace(' ', '%20')}" if tel_limpo else ""
                     
                     rel.append({
                         "Unidade": m.get('unidade'),
-                        "Data/Hora": dt,
                         "Médico": m.get('nome'),
+                        "Data/Hora": dt_vaga,
                         "Paciente": pac,
-                        "Telefone": r.get('paciente_telefone'), # Mostra o número
-                        "WhatsApp Link": link_zap,              # Mostra o https
-                        "Confirmado?": False,                  # Checkbox em branco
-                        "sort": r['data_hora']
+                        "Telefone": r.get('paciente_telefone'),
+                        "WhatsApp Link": link_zap,
+                        "Confirmado?": False
                     })
             
             if rel:
-                df_r = pd.DataFrame(rel).sort_values(by=['Unidade', 'sort'])
+                df_r = pd.DataFrame(rel)
                 
-                # Exibição com colunas específicas
+                # --- O PULO DO GATO: ORDENAÇÃO AGRUPADA ---
+                # Ordena primeiro por Unidade, depois por Médico, depois por Data
+                df_r = df_r.sort_values(by=['Unidade', 'Médico', 'Data/Hora'])
+                
+                # Exibição da Tabela com as configurações de coluna preservadas
                 st.data_editor(
-                    df_r.drop(columns=['sort']), 
+                    df_r, 
                     column_config={
-                        "Data/Hora": st.column_config.DatetimeColumn(format="DD/MM/YYYY HH:mm"),
+                        "Data/Hora": st.column_config.DatetimeColumn("Data/Hora", format="DD/MM/YYYY HH:mm"),
                         "WhatsApp Link": st.column_config.LinkColumn("📱 Link Direto", display_text="https://wa.me"),
                         "Confirmado?": st.column_config.CheckboxColumn("✅ Marcar ao Enviar")
                     }, 
                     use_container_width=True, 
                     hide_index=True
                 )
+                st.info("💡 A lista está agrupada por Unidade e Médico para facilitar as confirmações.")
             else:
                 st.info("Não há consultas marcadas para o futuro.")
+
+
 
 # TELA 5 - CANCELAR CONSULTA
 elif menu == "5. Cancelar Consulta":
