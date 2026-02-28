@@ -248,58 +248,36 @@ elif menu == "3. Marcar Consulta":
 
 
 
-# ============================================
-# TELA 4 - RELATÓRIO DE CONSULTAS FUTURAS
-# (BUSCA INVERTIDA - CORRIGIDA)
-# ============================================
-
+# TELA 4 - RELATÓRIO DE CONSULTAS FUTURAS (BUSCA INVERTIDA)
 elif menu == "4. Relatório de Agendamentos":
-
     if verificar_senha():
-
         st.header("📋 Controle de Confirmações")
-
-        # 🔒 BUSCA INVERTIDA
-        dados_res = (
-            supabase
-            .table("CONSULTAS")
-            .select("*, MEDICOS(*)")
-            .order("id", descending=True)
-            .limit(10000)
+        
+        # 🔒 BUSCA INVERTIDA: Traz os IDs mais recentes (maiores) primeiro
+        # Isso garante que os agendamentos de hoje e do futuro entrem nos 10.000
+        dados_res = supabase.table("CONSULTAS")\
+            .select("*, MEDICOS(*)")\
+            .order("id", descending=True)\
+            .limit(10000)\
             .execute()
-        )
-
+        
         dados = dados_res.data
-
+        
         if dados:
-
             agora = dt_lib.datetime.now().replace(tzinfo=None)
             rel = []
-
             for r in dados:
-
                 m = r.get('MEDICOS') or r.get('medicos') or {}
-
                 dt_vaga = pd.to_datetime(r['data_hora']).replace(tzinfo=None)
-
-                # 🔹 Apenas Marcadas e Futuras
+                
+                # Filtra apenas Marcadas e Futuras
                 if dt_vaga >= agora and r['status'] == "Marcada":
-
                     pac = f"{r.get('paciente_nome','')} {r.get('paciente_sobrenome','')}".strip()
-
                     tel_limpo = ''.join(filter(str.isdigit, str(r.get('paciente_telefone', ''))))
-
-                    msg = (
-                        f"Olá, Gentileza Confirmar consulta Dr.(a) "
-                        f"{m.get('nome')} / {m.get('especialidade')} / "
-                        f"{dt_vaga.strftime('%d/%m/%Y %H:%M')} / {m.get('unidade')}"
-                    )
-
-                    link_zap = (
-                        f"https://wa.me/55{tel_limpo}?text={msg.replace(' ', '%20')}"
-                        if tel_limpo else ""
-                    )
-
+                    
+                    msg = f"Olá, Gentileza Confirmar consulta Dr.(a) {m.get('nome')} / {m.get('especialidade')} / {dt_vaga.strftime('%d/%m/%Y %H:%M')} / {m.get('unidade')}"
+                    link_zap = f"https://wa.me/55{tel_limpo}?text={msg.replace(' ', '%20')}" if tel_limpo else ""
+                    
                     rel.append({
                         "Unidade": m.get('unidade'),
                         "Data/Hora": dt_vaga,
@@ -310,84 +288,43 @@ elif menu == "4. Relatório de Agendamentos":
                         "Confirmado?": False,
                         "Data_Pura": dt_vaga.date()
                     })
-
+            
             if rel:
-
                 df_total = pd.DataFrame(rel)
-
-                # ============================================
-                # 🔹 GRUPOS DE UNIDADES (CORRIGIDO QUADRO 1)
-                # ============================================
-
-                unidades_q1 = [
-                    "Eldorado Av Jose Faria da Rocha 4408 2 andar",
-                    "Eldorado Av Jose Faria da Rocha 4408 2 and",  # ✅ NOVA VARIAÇÃO INSERIDA
-                    "Eldorado Av Jose Faria da Rocha 5959"
-                ]
-
-                unidades_q2 = [
-                    "Pç 7 Rua Carijos 424 SL 2213"
-                ]
-
-                unidades_q3 = [
-                    "Pç 7 Rua Rio de Janeiro 462 SL 303"
-                ]
+                
+                # Grupos de Unidades (Conforme solicitado)
+                unidades_q1 = ["Eldorado Av Jose Faria da Rocha 4408 2 andar", "Eldorado Av Jose Faria da Rocha 5959"]
+                unidades_q2 = ["Pç 7 Rua Carijos 424 SL 2213"]
+                unidades_q3 = ["Pç 7 Rua Rio de Janeiro 462 SL 303"]
 
                 def renderizar_quadro(titulo, lista_unidades):
-
                     df_q = df_total[df_total['Unidade'].isin(lista_unidades)]
-
                     st.subheader(titulo)
-
                     if not df_q.empty:
-
-                        df_q = df_q.sort_values(
-                            by=['Unidade', 'Data_Pura', 'Médico', 'Data/Hora']
-                        )
-
-                        colunas = [
-                            "Unidade",
-                            "Data/Hora",
-                            "Médico",
-                            "Paciente",
-                            "Telefone",
-                            "WhatsApp Link",
-                            "Confirmado?"
-                        ]
-
+                        # Ordenação: Unidade > Dia > Médico > Hora
+                        df_q = df_q.sort_values(by=['Unidade', 'Data_Pura', 'Médico', 'Data/Hora'])
+                        colunas = ["Unidade", "Data/Hora", "Médico", "Paciente", "Telefone", "WhatsApp Link", "Confirmado?"]
+                        
                         st.data_editor(
-                            df_q[colunas],
+                            df_q[colunas], 
                             column_config={
-                                "Data/Hora": st.column_config.DatetimeColumn(
-                                    "Data/Hora",
-                                    format="DD/MM/YYYY HH:mm"
-                                ),
-                                "WhatsApp Link": st.column_config.LinkColumn(
-                                    "📱 Link Direto",
-                                    display_text="https://wa.me"
-                                ),
-                                "Confirmado?": st.column_config.CheckboxColumn(
-                                    "✅ Marcar ao Enviar"
-                                )
-                            },
-                            use_container_width=True,
+                                "Data/Hora": st.column_config.DatetimeColumn("Data/Hora", format="DD/MM/YYYY HH:mm"),
+                                "WhatsApp Link": st.column_config.LinkColumn("📱 Link Direto", display_text="https://wa.me"),
+                                "Confirmado?": st.column_config.CheckboxColumn("✅ Marcar ao Enviar")
+                            }, 
+                            use_container_width=True, 
                             hide_index=True,
-                            key=f"editor_{titulo.split()[-1]}"
+                            key=f"editor_{titulo.split()[-1]}" # Key simplificada
                         )
-
                     else:
                         st.info("Sem agendamentos futuros para este grupo.")
-
                     st.divider()
 
-                # 🔹 RENDERIZAÇÃO
                 renderizar_quadro("🏢 Quadro 1 - Eldorado", unidades_q1)
                 renderizar_quadro("🏢 Quadro 2 - Carijós", unidades_q2)
                 renderizar_quadro("🏢 Quadro 3 - Rio de Janeiro", unidades_q3)
-
             else:
                 st.info("Não há consultas marcadas para o futuro nos registros recentes.")
-
 
 
 # TELA 5 - CANCELAR CONSULTA
