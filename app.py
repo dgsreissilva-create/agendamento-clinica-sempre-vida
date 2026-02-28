@@ -247,7 +247,129 @@ elif menu == "3. Marcar Consulta":
         st.error("Nenhum médico cadastrado.")
 
 
+# TELA 4 - RELATÓRIO DE CONSULTAS FUTURAS (CORRIGIDO)
 
+elif menu == "4. Relatório de Agendamentos":
+
+    if verificar_senha():
+
+        st.header("📋 Controle de Confirmações")
+
+        agora = dt_lib.datetime.now()
+
+        # 🔒 BUSCA FILTRADA DIRETAMENTE NO BANCO
+        dados_res = supabase.table("CONSULTAS") \
+            .select("*, MEDICOS(*)") \
+            .eq("status", "Marcada") \
+            .gte("data_hora", agora.isoformat()) \
+            .order("data_hora") \
+            .execute()
+
+        dados = dados_res.data
+
+        if dados:
+
+            rel = []
+
+            for r in dados:
+
+                m = r.get('MEDICOS') or r.get('medicos') or {}
+
+                dt_vaga = pd.to_datetime(r['data_hora'])
+
+                pac = f"{r.get('paciente_nome','')} {r.get('paciente_sobrenome','')}".strip()
+
+                tel_limpo = ''.join(filter(str.isdigit, str(r.get('paciente_telefone', ''))))
+
+                msg = (
+                    f"Olá, Gentileza Confirmar consulta Dr.(a) "
+                    f"{m.get('nome')} / {m.get('especialidade')} / "
+                    f"{dt_vaga.strftime('%d/%m/%Y %H:%M')} / {m.get('unidade')}"
+                )
+
+                link_zap = (
+                    f"https://wa.me/55{tel_limpo}?text={msg.replace(' ', '%20')}"
+                    if tel_limpo else ""
+                )
+
+                rel.append({
+                    "Unidade": m.get('unidade'),
+                    "Data/Hora": dt_vaga,
+                    "Médico": m.get('nome'),
+                    "Paciente": pac,
+                    "Telefone": r.get('paciente_telefone'),
+                    "WhatsApp Link": link_zap,
+                    "Confirmado?": False,
+                    "Data_Pura": dt_vaga.date()
+                })
+
+            df_total = pd.DataFrame(rel)
+
+            # 🔹 DEFINIÇÃO DOS GRUPOS
+            unidades_q1 = [
+                "Eldorado Av Jose Faria da Rocha 4408 2 andar",
+                "Eldorado Av Jose Faria da Rocha 5959"
+            ]
+
+            unidades_q2 = ["Pç 7 Rua Carijos 424 SL 2213"]
+
+            unidades_q3 = ["Pç 7 Rua Rio de Janeiro 462 SL 303"]
+
+            # 🔹 FUNÇÃO DE RENDERIZAÇÃO
+            def renderizar_quadro(titulo, lista_unidades):
+
+                df_q = df_total[df_total['Unidade'].isin(lista_unidades)]
+
+                st.subheader(titulo)
+
+                if not df_q.empty:
+
+                    df_q = df_q.sort_values(
+                        by=['Unidade', 'Data_Pura', 'Médico', 'Data/Hora']
+                    )
+
+                    colunas = [
+                        "Unidade",
+                        "Data/Hora",
+                        "Médico",
+                        "Paciente",
+                        "Telefone",
+                        "WhatsApp Link",
+                        "Confirmado?"
+                    ]
+
+                    st.data_editor(
+                        df_q[colunas],
+                        column_config={
+                            "Data/Hora": st.column_config.DatetimeColumn(
+                                "Data/Hora",
+                                format="DD/MM/YYYY HH:mm"
+                            ),
+                            "WhatsApp Link": st.column_config.LinkColumn(
+                                "📱 Link Direto",
+                                display_text="https://wa.me"
+                            ),
+                            "Confirmado?": st.column_config.CheckboxColumn(
+                                "✅ Marcar ao Enviar"
+                            )
+                        },
+                        use_container_width=True,
+                        hide_index=True,
+                        key=f"editor_{titulo}"
+                    )
+
+                else:
+                    st.info(f"Sem agendamentos futuros para: {', '.join(lista_unidades)}")
+
+                st.divider()
+
+            # 🔹 RENDERIZAÇÃO DOS 3 QUADROS
+            renderizar_quadro("🏢 Quadro 1 - Eldorado", unidades_q1)
+            renderizar_quadro("🏢 Quadro 2 - Pç 7 (Carijós)", unidades_q2)
+            renderizar_quadro("🏢 Quadro 3 - Pç 7 (Rio de Janeiro)", unidades_q3)
+
+        else:
+            st.info("Não há consultas marcadas para o futuro.")
 
 
 
