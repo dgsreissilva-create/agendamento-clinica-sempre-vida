@@ -129,19 +129,20 @@ elif menu == "2. Abertura de Agenda":
 
 
 
-
-# TELA 3 - MARCAR CONSULTA (VERSÃO FINAL BLINDADA)
+# TELA 3 - MARCAR CONSULTA (VERSÃO COMPLETA: SEM LIMITES E BLINDADA)
 elif menu == "3. Marcar Consulta":
     st.header("📅 Agendamento de Consultas")
 
-    # Inicializa o controle de bloqueio no estado da sessão
+    # Inicializa o controle de bloqueio para evitar cliques duplos
     if "bloqueio" not in st.session_state:
         st.session_state.bloqueio = False
 
-    # 🔒 BUSCA DIRETA DO BANCO (SEM CACHE)
+    # 🔒 BUSCA SEM LIMITE (Aumentado para 10.000 para não sumir médicos)
+    # Buscamos direto para garantir que o "Livre" seja real e completo
     dados_res = supabase.table("CONSULTAS")\
         .select("*, MEDICOS(*)")\
         .eq("status", "Livre")\
+        .limit(10000)\
         .execute()
 
     dados = dados_res.data
@@ -163,7 +164,7 @@ elif menu == "3. Marcar Consulta":
 
         df = pd.DataFrame(v_list).sort_values('sort')
 
-        # Filtros sequenciais (Visual Original)
+        # --- FILTROS VISUAIS ORIGINAIS ---
         u_sel = st.selectbox("1. Escolha a Unidade", sorted(df['unidade'].unique()))
         df_u = df[df['unidade'] == u_sel]
 
@@ -186,16 +187,16 @@ elif menu == "3. Marcar Consulta":
             submit = st.form_submit_button("Finalizar Agendamento")
 
             if submit:
-                # 🔒 PROTEÇÃO CONTRA DUPLO CLIQUE
+                # 🔒 TRAVA DE CLIQUES DUPLOS
                 if st.session_state.bloqueio:
-                    st.warning("⏳ Processando agendamento... Por favor, aguarde.")
+                    st.warning("⏳ Processando... Aguarde um instante.")
                     st.stop()
 
                 if pn and pt:
                     st.session_state.bloqueio = True
                     
                     try:
-                        # 🔐 UPDATE COM TRAVA DE STATUS (SÓ GRAVA SE AINDA ESTIVER LIVRE)
+                        # 🔐 UPDATE BLINDADO (Só altera se ainda estiver 'Livre')
                         resposta = supabase.table("CONSULTAS")\
                             .update({
                                 "paciente_nome": pn.upper(),
@@ -208,26 +209,24 @@ elif menu == "3. Marcar Consulta":
                             .eq("status", "Livre")\
                             .execute()
 
-                        # 🔎 CONFERÊNCIA DE GRAVAÇÃO REAL
+                        # 🔎 VERIFICAÇÃO SE GRAVOU DE FATO
                         if resposta.data and len(resposta.data) > 0:
                             st.success(f"✅ Agendamento de {pn.upper()} realizado com sucesso!")
                             st.session_state.bloqueio = False
                             st.rerun()
                         else:
-                            # Se caiu aqui, é porque alguém agendou o mesmo ID milissegundos antes
+                            # Caso de concorrência (alguém agendou no mesmo segundo)
                             st.session_state.bloqueio = False
-                            st.error("⚠️ Este horário acabou de ser ocupado. Por favor, selecione outro.")
-                            st.info("💡 A lista de horários será atualizada agora.")
+                            st.error("⚠️ Este horário não está mais disponível. A lista será atualizada.")
                             st.rerun()
 
                     except Exception as e:
                         st.session_state.bloqueio = False
-                        st.error("Erro na conexão com o banco de dados. Tente novamente.")
+                        st.error("Erro técnico na gravação. Tente novamente.")
                 else:
-                    st.warning("⚠️ Nome e WhatsApp são campos obrigatórios!")
+                    st.warning("⚠️ Preencha Nome e WhatsApp para continuar.")
     else:
-        st.info("Não há horários livres disponíveis no momento.")
-
+        st.info("Não há horários 'Livres' disponíveis para agendamento.")
 
 
 
