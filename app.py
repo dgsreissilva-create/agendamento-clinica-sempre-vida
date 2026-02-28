@@ -129,26 +129,26 @@ elif menu == "2. Abertura de Agenda":
 
 
 
-# TELA 3 - MARCAR CONSULTA (VERSÃO COMPLETA: SEM LIMITES E BLINDADA)
+# TELA 3 - MARCAR CONSULTA (VERSÃO FINAL BLINDADA)
 elif menu == "3. Marcar Consulta":
     st.header("📅 Agendamento de Consultas")
 
-    # Inicializa o controle de bloqueio para evitar cliques duplos
+    # Controle de bloqueio contra duplo clique
     if "bloqueio" not in st.session_state:
         st.session_state.bloqueio = False
 
-    # 🔒 BUSCA SEM LIMITE (Aumentado para 10.000 para não sumir médicos)
-    # Buscamos direto para garantir que o "Livre" seja real e completo
-    dados_res = supabase.table("CONSULTAS")\
-        .select("*, MEDICOS(*)")\
-        .eq("status", "Livre")\
-        .limit(10000)\
+    # 🔒 BUSCA DIRETA DO BANCO (SEM CACHE)
+    dados_res = supabase.table("CONSULTAS") \
+        .select("*, MEDICOS(*)") \
+        .eq("status", "Livre") \
         .execute()
 
     dados = dados_res.data
 
     if dados:
+
         v_list = []
+
         for r in dados:
             m = r.get('MEDICOS') or r.get('medicos')
             if m:
@@ -162,23 +162,48 @@ elif menu == "3. Marcar Consulta":
                     'sort': r['data_hora']
                 })
 
+        # Proteção extra caso lista venha vazia
+        if len(v_list) == 0:
+            st.info("Não há horários livres disponíveis no momento.")
+            st.stop()
+
         df = pd.DataFrame(v_list).sort_values('sort')
 
-        # --- FILTROS VISUAIS ORIGINAIS ---
-        u_sel = st.selectbox("1. Escolha a Unidade", sorted(df['unidade'].unique()))
+        # 🔹 1. Unidade
+        u_sel = st.selectbox(
+            "1. Escolha a Unidade",
+            sorted(df['unidade'].unique())
+        )
         df_u = df[df['unidade'] == u_sel]
 
-        esp_sel = st.selectbox("2. Escolha a Especialidade", sorted(df_u['especialidade'].unique()))
+        # 🔹 2. Especialidade
+        esp_sel = st.selectbox(
+            "2. Escolha a Especialidade",
+            sorted(df_u['especialidade'].unique())
+        )
         df_esp = df_u[df_u['especialidade'] == esp_sel]
 
-        m_sel = st.selectbox("3. Escolha o Médico", sorted(df_esp['medico'].unique()))
+        # 🔹 3. Médico
+        m_sel = st.selectbox(
+            "3. Escolha o Médico",
+            sorted(df_esp['medico'].unique())
+        )
         df_m = df_esp[df_esp['medico'] == m_sel]
 
-        h_sel = st.selectbox("4. Escolha o Horário", df_m['display'].tolist())
+        # 🔹 4. Horário
+        h_sel = st.selectbox(
+            "4. Escolha o Horário",
+            df_m['display'].tolist()
+        )
+
         id_vaga = df_m[df_m['display'] == h_sel].iloc[0]['id']
 
+        # ------------------ FORMULÁRIO ------------------
+
         with st.form("form_paciente", clear_on_submit=True):
+
             c1, c2 = st.columns(2)
+
             pn = c1.text_input("Nome")
             ps = c1.text_input("Sobrenome")
             pt = c2.text_input("WhatsApp")
@@ -187,46 +212,51 @@ elif menu == "3. Marcar Consulta":
             submit = st.form_submit_button("Finalizar Agendamento")
 
             if submit:
-                # 🔒 TRAVA DE CLIQUES DUPLOS
+
+                # 🔒 Proteção contra duplo clique
                 if st.session_state.bloqueio:
-                    st.warning("⏳ Processando... Aguarde um instante.")
+                    st.warning("⏳ Processando agendamento... Aguarde.")
                     st.stop()
 
                 if pn and pt:
+
                     st.session_state.bloqueio = True
-                    
+
                     try:
-                        # 🔐 UPDATE BLINDADO (Só altera se ainda estiver 'Livre')
-                        resposta = supabase.table("CONSULTAS")\
+                        # 🔐 UPDATE SEGURO (ANTI CONCORRÊNCIA)
+                        resposta = supabase.table("CONSULTAS") \
                             .update({
-                                "paciente_nome": pn.upper(),
-                                "paciente_sobrenome": ps.upper(),
+                                "paciente_nome": pn,
+                                "paciente_sobrenome": ps,
                                 "paciente_telefone": pt,
-                                "paciente_convenio": pc.upper(),
+                                "paciente_convenio": pc,
                                 "status": "Marcada"
-                            })\
-                            .eq("id", id_vaga)\
-                            .eq("status", "Livre")\
+                            }) \
+                            .eq("id", id_vaga) \
+                            .eq("status", "Livre") \
                             .execute()
 
-                        # 🔎 VERIFICAÇÃO SE GRAVOU DE FATO
+                        # 🔎 Confirma se realmente atualizou
                         if resposta.data and len(resposta.data) > 0:
-                            st.success(f"✅ Agendamento de {pn.upper()} realizado com sucesso!")
+
+                            st.success("✅ Agendada com sucesso!")
                             st.session_state.bloqueio = False
-                            st.rerun()
-                        else:
-                            # Caso de concorrência (alguém agendou no mesmo segundo)
-                            st.session_state.bloqueio = False
-                            st.error("⚠️ Este horário não está mais disponível. A lista será atualizada.")
                             st.rerun()
 
-                    except Exception as e:
+                        else:
+                            st.session_state.bloqueio = False
+                            st.error("⚠️ Este horário acabou de ser ocupado. Escolha outro.")
+                            st.rerun()
+
+                    except Exception:
                         st.session_state.bloqueio = False
-                        st.error("Erro técnico na gravação. Tente novamente.")
+                        st.error("Erro na conexão com o banco. Tente novamente.")
+
                 else:
-                    st.warning("⚠️ Preencha Nome e WhatsApp para continuar.")
+                    st.warning("⚠️ Nome e WhatsApp são obrigatórios!")
+
     else:
-        st.info("Não há horários 'Livres' disponíveis para agendamento.")
+        st.info("Não há horários livres disponíveis no momento.")
 
 
 
