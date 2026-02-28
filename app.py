@@ -436,75 +436,128 @@ elif menu == "7. Excluir Cadastro de Médico":
 
 
 
+
+
+# =========================================================
 # TELA 8 - RELATÓRIO GERENCIAL (FOCO EM DATAS FUTURAS)
+# CORRIGIDO NOS INDICADORES
+# =========================================================
+
 elif menu == "8. Relatório Gerencial":
+
     if verificar_senha():
+
         st.header("📊 Resumo de Ocupação por Dia")
-        
+
         dados_consultas = buscar_todos("CONSULTAS")
         dados_medicos = buscar_todos("MEDICOS")
-        
+
         if dados_consultas:
+
             df = pd.DataFrame(dados_consultas)
+
+            # 🔒 Segurança de dados
+            df = df[df['data_hora'].notna()].copy()
+            df['data_dt'] = pd.to_datetime(df['data_hora'], errors='coerce').dt.date
+            df = df[df['data_dt'].notna()]
+
             hoje_dt = dt_lib.datetime.now().date()
             ontem_dt = hoje_dt - dt_lib.timedelta(days=1)
             ante_dt = hoje_dt - dt_lib.timedelta(days=2)
-            
-            df['data_dt'] = pd.to_datetime(df['data_hora']).dt.date
-            
-            # --- PARTE 1: RESUMO DIÁRIO (FILTRADO: APENAS HOJE E FUTURO) ---
-            resumo_completo = df.groupby('data_dt').agg(
-                Total_Vagas=('id', 'count'),
-                Agendados=('status', lambda x: (x == 'Marcada').sum())
-            ).reset_index()
-            
-            # FILTRO: Mostra na tabela apenas o que for de hoje para frente
+
+            # =========================================================
+            # 🔹 RESUMO COMPLETO CORRIGIDO
+            # =========================================================
+
+            resumo_completo = (
+                df.groupby('data_dt')
+                .agg(
+                    Total_Vagas=('id', 'count'),
+                    Agendados=('status', lambda x: (x == 'Marcada').sum())
+                )
+                .reset_index()
+            )
+
+            # =========================================================
+            # 🔹 PARTE 1 - TABELA FUTURA (INALTERADA VISUALMENTE)
+            # =========================================================
+
             resumo_futuro = resumo_completo[resumo_completo['data_dt'] >= hoje_dt].copy()
-            resumo_futuro = resumo_futuro.sort_values('data_dt', ascending=True) # Ordem cronológica
+            resumo_futuro = resumo_futuro.sort_values('data_dt', ascending=True)
             resumo_futuro['Data'] = resumo_futuro['data_dt'].apply(lambda x: x.strftime('%d/%m/%Y'))
-            
+
             st.write("### Ocupação Diária (Hoje e Futuro)")
+
             if not resumo_futuro.empty:
-                st.dataframe(resumo_futuro[['Data', 'Total_Vagas', 'Agendados']], use_container_width=True, hide_index=True)
+                st.dataframe(
+                    resumo_futuro[['Data', 'Total_Vagas', 'Agendados']],
+                    use_container_width=True,
+                    hide_index=True
+                )
             else:
                 st.info("Não há grades abertas para datas futuras.")
-            
-            # --- PARTE 2: MÉDICOS SEM GRADE FUTURA (PRESERVADO) ---
+
+            # =========================================================
+            # 🔹 PARTE 2 - MÉDICOS SEM GRADE FUTURA (INALTERADO)
+            # =========================================================
+
             st.divider()
             st.subheader("⚠️ Médicos sem Grade Aberta (Futuro)")
+
             if dados_medicos:
+
                 df_meds = pd.DataFrame(dados_medicos)
                 df_futuro_consultas = df[df['data_dt'] >= hoje_dt]
                 ids_com_grade = df_futuro_consultas['medico_id'].unique()
                 meds_sem_grade = df_meds[~df_meds['id'].isin(ids_com_grade)]
-                
+
                 if not meds_sem_grade.empty:
                     meds_sem_grade = meds_sem_grade.sort_values('nome')
-                    st.dataframe(meds_sem_grade[['nome', 'especialidade', 'unidade']], use_container_width=True, hide_index=True)
+                    st.dataframe(
+                        meds_sem_grade[['nome', 'especialidade', 'unidade']],
+                        use_container_width=True,
+                        hide_index=True
+                    )
                 else:
                     st.success("✅ Todos os médicos possuem grades futuras.")
 
-            # --- PARTE 3: INDICADORES (HOJE, ONTEM, ANTEONTEM) ---
+            # =========================================================
+            # 🔹 PARTE 3 - INDICADORES CORRIGIDOS
+            # =========================================================
+
             st.divider()
             st.subheader("📈 Comparativo de Desempenho")
 
-            def get_val(data, coluna):
-                filtro = resumo_completo[resumo_completo['data_dt'] == data]
-                return int(filtro[coluna].sum()) if not filtro.empty else 0
+            def get_agendados(data):
+                filtro = df[df['data_dt'] == data]
+                return int((filtro['status'] == 'Marcada').sum())
 
+            def get_vagas(data):
+                filtro = df[df['data_dt'] == data]
+                return int(len(filtro))
+
+            # 🔹 PACIENTES AGENDADOS
             st.write("**Pacientes Agendados:**")
             a1, a2, a3 = st.columns(3)
-            a1.metric(f"Hoje ({hoje_dt.strftime('%d/%m')})", get_val(hoje_dt, 'Agendados'))
-            a2.metric(f"Ontem ({ontem_dt.strftime('%d/%m')})", get_val(ontem_dt, 'Agendados'))
-            a3.metric(f"Anteontem ({ante_dt.strftime('%d/%m')})", get_val(ante_dt, 'Agendados'))
 
+            a1.metric(f"Hoje ({hoje_dt.strftime('%d/%m')})", get_agendados(hoje_dt))
+            a2.metric(f"Ontem ({ontem_dt.strftime('%d/%m')})", get_agendados(ontem_dt))
+            a3.metric(f"Anteontem ({ante_dt.strftime('%d/%m')})", get_agendados(ante_dt))
+
+            # 🔹 GRADES ABERTAS
             st.write("**Grades Abertas (Total):**")
             g1, g2, g3 = st.columns(3)
-            g1.metric(f"Hoje ({hoje_dt.strftime('%d/%m')})", get_val(hoje_dt, 'Total_Vagas'))
-            g2.metric(f"Ontem ({ontem_dt.strftime('%d/%m')})", get_val(ontem_dt, 'Total_Vagas'))
-            g3.metric(f"Anteontem ({ante_dt.strftime('%d/%m')})", get_val(ante_dt, 'Total_Vagas'))
+
+            g1.metric(f"Hoje ({hoje_dt.strftime('%d/%m')})", get_vagas(hoje_dt))
+            g2.metric(f"Ontem ({ontem_dt.strftime('%d/%m')})", get_vagas(ontem_dt))
+            g3.metric(f"Anteontem ({ante_dt.strftime('%d/%m')})", get_vagas(ante_dt))
+
+            # =========================================================
+            # 🔹 TOTAL GERAL (INALTERADO VISUAL)
+            # =========================================================
 
             st.divider()
             c1, c2 = st.columns(2)
+
             c1.metric("Total Geral de Vagas (Sistema)", len(df))
             c2.metric("Total Geral Agendado", len(df[df['status'] == 'Marcada']))
