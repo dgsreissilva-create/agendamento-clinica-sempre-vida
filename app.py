@@ -130,100 +130,121 @@ elif menu == "2. Abertura de Agenda":
 
 
 
-# TELA 3 - MARCAR CONSULTA (VERSÃO TOTAL: SEM LIMITES E ANTIDUPLICIDADE)
+# TELA 3 - MARCAR CONSULTA (MOSTRA TODOS MÉDICOS)
+
 elif menu == "3. Marcar Consulta":
     st.header("📅 Agendamento de Consultas")
 
-    # Inicializa o bloqueio de duplo clique
     if "bloqueio" not in st.session_state:
         st.session_state.bloqueio = False
 
-    # 🔒 BUSCA AMPLIADA (Limitada a 10.000 para ler toda a grade aberta)
-    dados_res = supabase.table("CONSULTAS")\
-        .select("*, MEDICOS(*)")\
-        .eq("status", "Livre")\
-        .limit(10000)\
-        .execute()
+    # 🔹 1️⃣ BUSCA TODOS OS MÉDICOS
+    medicos_res = supabase.table("MEDICOS").select("*").execute()
+    medicos = medicos_res.data
 
-    dados = dados_res.data
+    if medicos:
 
-    if dados:
-        v_list = []
-        for r in dados:
-            m = r.get('MEDICOS') or r.get('medicos')
-            if m:
-                dt = pd.to_datetime(r['data_hora'])
-                v_list.append({
-                    'id': r['id'],
-                    'unidade': m['unidade'],
-                    'especialidade': m['especialidade'],
-                    'medico': m['nome'],
-                    'display': dt.strftime('%d/%m/%Y %H:%M'),
-                    'sort': r['data_hora']
-                })
+        df_med = pd.DataFrame(medicos)
 
-        df = pd.DataFrame(v_list).sort_values('sort')
+        # 1. Unidade
+        u_sel = st.selectbox(
+            "1. Escolha a Unidade",
+            sorted(df_med['unidade'].unique())
+        )
+        df_u = df_med[df_med['unidade'] == u_sel]
 
-        # --- FILTROS SEQUENCIAIS (VISUAL PRESERVADO) ---
-        u_sel = st.selectbox("1. Escolha a Unidade", sorted(df['unidade'].unique()))
-        df_u = df[df['unidade'] == u_sel]
-
-        esp_sel = st.selectbox("2. Escolha a Especialidade", sorted(df_u['especialidade'].unique()))
+        # 2. Especialidade
+        esp_sel = st.selectbox(
+            "2. Escolha a Especialidade",
+            sorted(df_u['especialidade'].unique())
+        )
         df_esp = df_u[df_u['especialidade'] == esp_sel]
 
-        m_sel = st.selectbox("3. Escolha o Médico", sorted(df_esp['medico'].unique()))
-        df_m = df_esp[df_esp['medico'] == m_sel]
+        # 3. Médico
+        m_sel = st.selectbox(
+            "3. Escolha o Médico",
+            sorted(df_esp['nome'].unique())
+        )
 
-        h_sel = st.selectbox("4. Escolha o Horário", df_m['display'].tolist())
-        id_vaga = df_m[df_m['display'] == h_sel].iloc[0]['id']
+        medico_id = df_esp[df_esp['nome'] == m_sel].iloc[0]['id']
 
-        with st.form("form_paciente", clear_on_submit=True):
-            c1, c2 = st.columns(2)
-            pn = c1.text_input("Nome")
-            ps = c1.text_input("Sobrenome")
-            pt = c2.text_input("WhatsApp")
-            pc = c2.text_input("Convênio")
+        # 🔹 2️⃣ BUSCA HORÁRIOS LIVRES APENAS DO MÉDICO SELECIONADO
+        consultas_res = supabase.table("CONSULTAS") \
+            .select("*") \
+            .eq("medico_id", medico_id) \
+            .eq("status", "Livre") \
+            .order("data_hora") \
+            .execute()
 
-            submit = st.form_submit_button("Finalizar Agendamento")
+        consultas = consultas_res.data
 
-            if submit:
-                if st.session_state.bloqueio:
-                    st.warning("⏳ Processando... Aguarde.")
-                    st.stop()
+        if consultas:
 
-                if pn and pt:
-                    st.session_state.bloqueio = True
-                    
-                    try:
-                        # 🔐 UPDATE COM TRAVA (Garante que o horário ainda está Livre no banco)
-                        resposta = supabase.table("CONSULTAS")\
+            horarios = []
+            for c in consultas:
+                dt = pd.to_datetime(c['data_hora'])
+                horarios.append({
+                    "id": c['id'],
+                    "display": dt.strftime('%d/%m/%Y %H:%M')
+                })
+
+            df_h = pd.DataFrame(horarios)
+
+            h_sel = st.selectbox(
+                "4. Escolha o Horário",
+                df_h['display'].tolist()
+            )
+
+            id_vaga = df_h[df_h['display'] == h_sel].iloc[0]['id']
+
+            with st.form("form_paciente", clear_on_submit=True):
+
+                c1, c2 = st.columns(2)
+                pn = c1.text_input("Nome")
+                ps = c1.text_input("Sobrenome")
+                pt = c2.text_input("WhatsApp")
+                pc = c2.text_input("Convênio")
+
+                submit = st.form_submit_button("Finalizar Agendamento")
+
+                if submit:
+
+                    if st.session_state.bloqueio:
+                        st.warning("⏳ Processando...")
+                        st.stop()
+
+                    if pn and pt:
+
+                        st.session_state.bloqueio = True
+
+                        resposta = supabase.table("CONSULTAS") \
                             .update({
-                                "paciente_nome": pn.upper(),
-                                "paciente_sobrenome": ps.upper(),
+                                "paciente_nome": pn,
+                                "paciente_sobrenome": ps,
                                 "paciente_telefone": pt,
-                                "paciente_convenio": pc.upper(),
+                                "paciente_convenio": pc,
                                 "status": "Marcada"
-                            })\
-                            .eq("id", id_vaga)\
-                            .eq("status", "Livre")\
+                            }) \
+                            .eq("id", id_vaga) \
+                            .eq("status", "Livre") \
                             .execute()
 
                         if resposta.data and len(resposta.data) > 0:
-                            st.success(f"✅ Agendamento de {pn.upper()} realizado com sucesso!")
+                            st.success("✅ Agendada com sucesso!")
                             st.session_state.bloqueio = False
                             st.rerun()
                         else:
                             st.session_state.bloqueio = False
-                            st.error("⚠️ Este horário foi ocupado agora pouco. Por favor, escolha outro.")
+                            st.error("⚠️ Horário ocupado. Escolha outro.")
                             st.rerun()
+                    else:
+                        st.warning("⚠️ Nome e WhatsApp são obrigatórios!")
 
-                    except Exception as e:
-                        st.session_state.bloqueio = False
-                        st.error("Erro na gravação. Tente novamente.")
-                else:
-                    st.warning("⚠️ Nome e WhatsApp são obrigatórios!")
+        else:
+            st.info("Este médico não possui horários livres no momento.")
+
     else:
-        st.info("Não há horários 'Livres' no banco de dados para os critérios selecionados.")
+        st.error("Nenhum médico cadastrado.")
 
 
 
