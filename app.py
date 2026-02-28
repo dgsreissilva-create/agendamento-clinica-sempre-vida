@@ -247,7 +247,7 @@ elif menu == "3. Marcar Consulta":
         st.error("Nenhum médico cadastrado.")
 
 
-# TELA 4 - RELATÓRIO DE CONSULTAS FUTURAS (COM CONFIRMAÇÃO PERSISTENTE)
+# TELA 4 - RELATÓRIO DE CONSULTAS FUTURAS (CORRIGIDO)
 
 elif menu == "4. Relatório de Agendamentos":
 
@@ -257,7 +257,7 @@ elif menu == "4. Relatório de Agendamentos":
 
         agora = dt_lib.datetime.now()
 
-        # 🔒 BUSCA DIRETAMENTE DO BANCO (SOMENTE MARCADAS E FUTURAS)
+        # 🔒 BUSCA FILTRADA DIRETAMENTE NO BANCO
         dados_res = supabase.table("CONSULTAS") \
             .select("*, MEDICOS(*)") \
             .eq("status", "Marcada") \
@@ -274,9 +274,11 @@ elif menu == "4. Relatório de Agendamentos":
             for r in dados:
 
                 m = r.get('MEDICOS') or r.get('medicos') or {}
+
                 dt_vaga = pd.to_datetime(r['data_hora'])
 
                 pac = f"{r.get('paciente_nome','')} {r.get('paciente_sobrenome','')}".strip()
+
                 tel_limpo = ''.join(filter(str.isdigit, str(r.get('paciente_telefone', ''))))
 
                 msg = (
@@ -291,14 +293,13 @@ elif menu == "4. Relatório de Agendamentos":
                 )
 
                 rel.append({
-                    "id": r["id"],  # 🔒 ESSENCIAL PARA SALVAR
                     "Unidade": m.get('unidade'),
                     "Data/Hora": dt_vaga,
                     "Médico": m.get('nome'),
                     "Paciente": pac,
                     "Telefone": r.get('paciente_telefone'),
                     "WhatsApp Link": link_zap,
-                    "Confirmado?": r.get("confirmado", False),
+                    "Confirmado?": False,
                     "Data_Pura": dt_vaga.date()
                 })
 
@@ -317,7 +318,7 @@ elif menu == "4. Relatório de Agendamentos":
             # 🔹 FUNÇÃO DE RENDERIZAÇÃO
             def renderizar_quadro(titulo, lista_unidades):
 
-                df_q = df_total[df_total['Unidade'].isin(lista_unidades)].copy()
+                df_q = df_total[df_total['Unidade'].isin(lista_unidades)]
 
                 st.subheader(titulo)
 
@@ -327,7 +328,7 @@ elif menu == "4. Relatório de Agendamentos":
                         by=['Unidade', 'Data_Pura', 'Médico', 'Data/Hora']
                     )
 
-                    colunas_visiveis = [
+                    colunas = [
                         "Unidade",
                         "Data/Hora",
                         "Médico",
@@ -337,8 +338,8 @@ elif menu == "4. Relatório de Agendamentos":
                         "Confirmado?"
                     ]
 
-                    edited_df = st.data_editor(
-                        df_q[["id"] + colunas_visiveis],
+                    st.data_editor(
+                        df_q[colunas],
                         column_config={
                             "Data/Hora": st.column_config.DatetimeColumn(
                                 "Data/Hora",
@@ -350,25 +351,12 @@ elif menu == "4. Relatório de Agendamentos":
                             ),
                             "Confirmado?": st.column_config.CheckboxColumn(
                                 "✅ Marcar ao Enviar"
-                            ),
-                            "id": None  # 🔒 Oculta ID
+                            )
                         },
                         use_container_width=True,
                         hide_index=True,
                         key=f"editor_{titulo}"
                     )
-
-                    # 🔐 SALVA ALTERAÇÕES NO BANCO
-                    for _, row in edited_df.iterrows():
-
-                        original = df_q[df_q["id"] == row["id"]]["Confirmado?"].values[0]
-
-                        if row["Confirmado?"] != original:
-
-                            supabase.table("CONSULTAS") \
-                                .update({"confirmado": row["Confirmado?"]}) \
-                                .eq("id", row["id"]) \
-                                .execute()
 
                 else:
                     st.info(f"Sem agendamentos futuros para: {', '.join(lista_unidades)}")
@@ -382,6 +370,7 @@ elif menu == "4. Relatório de Agendamentos":
 
         else:
             st.info("Não há consultas marcadas para o futuro.")
+
 
 
 
