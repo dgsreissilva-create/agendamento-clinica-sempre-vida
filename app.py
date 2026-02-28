@@ -247,7 +247,6 @@ elif menu == "3. Marcar Consulta":
         st.error("Nenhum médico cadastrado.")
 
 
-
 # TELA 4 - RELATÓRIO DE CONSULTAS FUTURAS (BUSCA INVERTIDA)
 elif menu == "4. Relatório de Agendamentos":
     if verificar_senha():
@@ -325,6 +324,7 @@ elif menu == "4. Relatório de Agendamentos":
                 renderizar_quadro("🏢 Quadro 3 - Rio de Janeiro", unidades_q3)
             else:
                 st.info("Não há consultas marcadas para o futuro nos registros recentes.")
+
 
 
 # TELA 5 - CANCELAR CONSULTA
