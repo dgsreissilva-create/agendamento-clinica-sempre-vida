@@ -251,7 +251,7 @@ elif menu == "3. Marcar Consulta":
 # TELA 4 - RELATÓRIO DE CONSULTAS FUTURAS (VERSÃO BLINDADA E ESTÁVEL)
 elif menu == "4. Relatório de Agendamentos":
     if verificar_senha():
-        st.header("📋 Controle de Confirmações")
+        st.header("📋 Confirmações De Agendas")
         
         # 🕒 ESTABILIZAÇÃO: Filtra do início do dia de hoje (00:00) em diante
         # Isso impede que consultas de hoje sumam da tela após o salvamento
