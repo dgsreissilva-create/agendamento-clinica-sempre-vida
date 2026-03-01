@@ -250,18 +250,19 @@ elif menu == "3. Marcar Consulta":
 
 
 
-# TELA 4 - RELATÓRIO DE CONSULTAS FUTURAS (VERSÃO FINAL SEM ERROS)
+# TELA 4 - RELATÓRIO DE CONSULTAS FUTURAS (VERSÃO BLINDADA E SEM ERRO DE TYPE)
 elif menu == "4. Relatório de Agendamentos":
     if verificar_senha():
         st.header("📋 Controle de Confirmações")
         agora = dt_lib.datetime.now()
 
         # 🔒 BUSCA DIRETA, INVERTIDA E AMPLIADA (Garante que nada suma)
+        # Corrigido: 'desc=True' é o padrão correto do Supabase Python
         dados_res = supabase.table("CONSULTAS") \
             .select("*, MEDICOS(*)") \
             .eq("status", "Marcada") \
             .gte("data_hora", agora.isoformat()) \
-            .order("id", descending=True) \
+            .order("id", desc=True) \
             .limit(10000) \
             .execute()
 
@@ -288,7 +289,7 @@ elif menu == "4. Relatório de Agendamentos":
                 )
 
                 rel.append({
-                    "ID": r['id'], # Identificador Único para o Salvamento
+                    "ID": r['id'], 
                     "Unidade": m.get('unidade'),
                     "Data/Hora": dt_vaga,
                     "Médico": m.get('nome'),
@@ -317,12 +318,11 @@ elif menu == "4. Relatório de Agendamentos":
                 
                 st.subheader(titulo)
                 if not df_q.empty:
-                    # AMARRAÇÃO: O ID vira o index. Isso evita o erro "out-of-bounds"
+                    # AMARRAÇÃO PELO ID: Evita erro de index no salvamento
                     df_q = df_q.set_index('ID')
                     df_q = df_q.sort_values(by=['Unidade', 'Data_Pura', 'Médico', 'Data/Hora'])
                     
                     # Exibição do Editor
-                    # Removemos Data_Pura da visão, mas o ID (index) fica para referência
                     edited_df = st.data_editor(
                         df_q.drop(columns=["Data_Pura"]),
                         column_config={
@@ -331,7 +331,7 @@ elif menu == "4. Relatório de Agendamentos":
                             "Confirmado?": st.column_config.CheckboxColumn("✅ Marcar ao Enviar")
                         },
                         use_container_width=True,
-                        hide_index=False, # Mantemos visível para segurança, ou oculte via CSS
+                        hide_index=False,
                         key=f"editor_{titulo.replace(' ', '_')}"
                     )
 
@@ -339,7 +339,6 @@ elif menu == "4. Relatório de Agendamentos":
                     if st.button(f"💾 Salvar Confirmações - {titulo}"):
                         try:
                             contador = 0
-                            # Percorre o editor usando o ID original como chave
                             for original_id, row in edited_df.iterrows():
                                 novo_status = row['Confirmado?']
                                 
@@ -350,10 +349,10 @@ elif menu == "4. Relatório de Agendamentos":
                                     .execute()
                                 contador += 1
                             
-                            st.success(f"✅ {contador} registros de {titulo} salvos com sucesso!")
+                            st.success(f"✅ {contador} registros de {titulo} salvos!")
                             st.rerun()
                         except Exception as e:
-                            st.error(f"Erro ao salvar no banco: {e}")
+                            st.error(f"Erro ao salvar: {e}")
                 else:
                     st.info(f"Sem agendamentos futuros para este grupo.")
                 st.divider()
