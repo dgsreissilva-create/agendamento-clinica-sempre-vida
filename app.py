@@ -248,7 +248,121 @@ elif menu == "3. Marcar Consulta":
 
 
 
+# TELA 4 - RELATÓRIO DE CONSULTAS FUTURAS (VERSÃO BLINDADA E ESTÁVEL)
+elif menu == "4. Relatório de Agendamentos":
+    if verificar_senha():
+        st.header("📋 Controle de Confirmações")
+        
+        # 🕒 ESTABILIZAÇÃO: Filtra do início do dia de hoje (00:00) em diante
+        # Isso impede que consultas de hoje sumam da tela após o salvamento
+        agora_br = dt_lib.datetime.now()
+        hoje_inicio = agora_br.replace(hour=0, minute=0, second=0, microsecond=0)
 
+        # 🔒 BUSCA AMPLIADA E INVERTIDA (Garante Eldorado e Especialidades do final da lista)
+        dados_res = supabase.table("CONSULTAS") \
+            .select("*, MEDICOS(*)") \
+            .eq("status", "Marcada") \
+            .gte("data_hora", hoje_inicio.isoformat()) \
+            .order("id", desc=True) \
+            .limit(10000) \
+            .execute()
+
+        dados = dados_res.data
+
+        if dados:
+            rel = []
+            for r in dados:
+                m = r.get('MEDICOS') or r.get('medicos') or {}
+                dt_vaga = pd.to_datetime(r['data_hora'])
+                
+                pac = f"{r.get('paciente_nome','')} {r.get('paciente_sobrenome','')}".strip()
+                tel_limpo = ''.join(filter(str.isdigit, str(r.get('paciente_telefone', ''))))
+                
+                msg = (
+                    f"Olá, Gentileza Confirmar consulta Dr.(a) "
+                    f"{m.get('nome')} / {m.get('especialidade')} / "
+                    f"{dt_vaga.strftime('%d/%m/%Y %H:%M')} / {m.get('unidade')}"
+                )
+
+                link_zap = (
+                    f"https://wa.me/55{tel_limpo}?text={msg.replace(' ', '%20')}"
+                    if tel_limpo else ""
+                )
+
+                rel.append({
+                    "ID": r['id'], 
+                    "Unidade": m.get('unidade'),
+                    "Data/Hora": dt_vaga,
+                    "Médico": m.get('nome'),
+                    "Paciente": pac,
+                    "Telefone": r.get('paciente_telefone'),
+                    "WhatsApp Link": link_zap,
+                    "Confirmado?": r.get('confirmado', False),
+                    "Data_Pura": dt_vaga.date()
+                })
+
+            df_total = pd.DataFrame(rel)
+
+            # 🔹 DEFINIÇÃO DOS GRUPOS (Incluindo variações de Eldorado)
+            unidades_q1 = [
+                "Eldorado Av Jose Faria da Rocha 4408 2 andar", 
+                "Eldorado Av Jose Faria da Rocha 4408 2 and",
+                "Eldorado Av Jose Faria da Rocha 5959"
+            ]
+            unidades_q2 = ["Pç 7 Rua Carijos 424 SL 2213"]
+            unidades_q3 = ["Pç 7 Rua Rio de Janeiro 462 SL 303"]
+
+            # 🔹 FUNÇÃO DE RENDERIZAÇÃO E SALVAMENTO SEGURO
+            def renderizar_quadro(titulo, lista_unidades):
+                df_q = df_total[df_total['Unidade'].isin(lista_unidades)].copy()
+                
+                st.subheader(titulo)
+                if not df_q.empty:
+                    # AMARRAÇÃO PELO ID: O ID vira o index para não dar erro de salvamento
+                    df_q = df_q.set_index('ID')
+                    df_q = df_q.sort_values(by=['Unidade', 'Data_Pura', 'Médico', 'Data/Hora'])
+                    
+                    # Exibição do Editor
+                    edited_df = st.data_editor(
+                        df_q.drop(columns=["Data_Pura"]),
+                        column_config={
+                            "Data/Hora": st.column_config.DatetimeColumn("Data/Hora", format="DD/MM/YYYY HH:mm"),
+                            "WhatsApp Link": st.column_config.LinkColumn("📱 Link Direto", display_text="https://wa.me"),
+                            "Confirmado?": st.column_config.CheckboxColumn("✅ Marcar ao Enviar")
+                        },
+                        use_container_width=True,
+                        hide_index=False,
+                        key=f"editor_{titulo.replace(' ', '_')}"
+                    )
+
+                    # Botão de Salvar Específico do Quadro
+                    if st.button(f"💾 Salvar Confirmações - {titulo}"):
+                        try:
+                            contador = 0
+                            # iterrows() com o ID como index garante o update correto
+                            for original_id, row in edited_df.iterrows():
+                                novo_status = row['Confirmado?']
+                                supabase.table("CONSULTAS")\
+                                    .update({"confirmado": novo_status})\
+                                    .eq("id", original_id)\
+                                    .execute()
+                                contador += 1
+                            
+                            st.success(f"✅ {contador} registros de {titulo} salvos!")
+                            st.rerun()
+                        except Exception as e:
+                            st.error(f"Erro ao salvar: {e}")
+                else:
+                    st.info(f"Sem agendamentos futuros para este grupo.")
+                st.divider()
+
+            # 🔹 EXECUÇÃO DOS 3 QUADROS
+            renderizar_quadro("🏢 Quadro 1 - Eldorado", unidades_q1)
+            renderizar_quadro("🏢 Quadro 2 - Pç 7 (Carijós)", unidades_q2)
+            renderizar_quadro("🏢 Quadro 3 - Pç 7 (Rio de Janeiro)", unidades_q3)
+            
+        else:
+            st.info("Não há consultas marcadas para o futuro.")
 
 
 
