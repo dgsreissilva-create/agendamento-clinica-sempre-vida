@@ -249,18 +249,19 @@ elif menu == "3. Marcar Consulta":
 
 
 
-# TELA 4 - RELATÓRIO DE CONSULTAS FUTURAS (COM GRAVAÇÃO DE CONFIRMAÇÃO)
+
+# TELA 4 - RELATÓRIO DE CONSULTAS FUTURAS (VERSÃO FINAL SEM ERROS)
 elif menu == "4. Relatório de Agendamentos":
     if verificar_senha():
         st.header("📋 Controle de Confirmações")
         agora = dt_lib.datetime.now()
 
-        # 🔒 BUSCA DIRETA
+        # 🔒 BUSCA DIRETA, INVERTIDA E AMPLIADA (Garante que nada suma)
         dados_res = supabase.table("CONSULTAS") \
             .select("*, MEDICOS(*)") \
             .eq("status", "Marcada") \
             .gte("data_hora", agora.isoformat()) \
-            .order("data_hora") \
+            .order("id", descending=True) \
             .limit(10000) \
             .execute()
 
@@ -275,67 +276,93 @@ elif menu == "4. Relatório de Agendamentos":
                 pac = f"{r.get('paciente_nome','')} {r.get('paciente_sobrenome','')}".strip()
                 tel_limpo = ''.join(filter(str.isdigit, str(r.get('paciente_telefone', ''))))
                 
-                msg = f"Olá, Gentileza Confirmar consulta Dr.(a) {m.get('nome')} / {m.get('especialidade')} / {dt_vaga.strftime('%d/%m/%Y %H:%M')} / {m.get('unidade')}"
-                link_zap = f"https://wa.me/55{tel_limpo}?text={msg.replace(' ', '%20')}" if tel_limpo else ""
+                msg = (
+                    f"Olá, Gentileza Confirmar consulta Dr.(a) "
+                    f"{m.get('nome')} / {m.get('especialidade')} / "
+                    f"{dt_vaga.strftime('%d/%m/%Y %H:%M')} / {m.get('unidade')}"
+                )
+
+                link_zap = (
+                    f"https://wa.me/55{tel_limpo}?text={msg.replace(' ', '%20')}"
+                    if tel_limpo else ""
+                )
 
                 rel.append({
-                    "ID": r['id'], # Adicionado ID oculto para o banco saber qual linha atualizar
+                    "ID": r['id'], # Identificador Único para o Salvamento
                     "Unidade": m.get('unidade'),
                     "Data/Hora": dt_vaga,
                     "Médico": m.get('nome'),
                     "Paciente": pac,
                     "Telefone": r.get('paciente_telefone'),
                     "WhatsApp Link": link_zap,
-                    "Confirmado?": r.get('confirmado', False), # Busca o status real do banco
+                    "Confirmado?": r.get('confirmado', False),
                     "Data_Pura": dt_vaga.date()
                 })
 
             df_total = pd.DataFrame(rel)
 
-            unidades_q1 = ["Eldorado Av Jose Faria da Rocha 4408 2 andar", "Eldorado Av Jose Faria da Rocha 4408 2 and", "Eldorado Av Jose Faria da Rocha 5959"]
+            # 🔹 DEFINIÇÃO DOS GRUPOS DE UNIDADES
+            unidades_q1 = [
+                "Eldorado Av Jose Faria da Rocha 4408 2 andar", 
+                "Eldorado Av Jose Faria da Rocha 4408 2 and",
+                "Eldorado Av Jose Faria da Rocha 5959"
+            ]
             unidades_q2 = ["Pç 7 Rua Carijos 424 SL 2213"]
             unidades_q3 = ["Pç 7 Rua Rio de Janeiro 462 SL 303"]
 
+            # 🔹 FUNÇÃO DE RENDERIZAÇÃO E SALVAMENTO
             def renderizar_quadro(titulo, lista_unidades):
-                df_q = df_total[df_total['Unidade'].isin(lista_unidades)]
-                st.subheader(titulo)
+                # Filtra e cria uma cópia para evitar avisos do Pandas
+                df_q = df_total[df_total['Unidade'].isin(lista_unidades)].copy()
                 
+                st.subheader(titulo)
                 if not df_q.empty:
+                    # AMARRAÇÃO: O ID vira o index. Isso evita o erro "out-of-bounds"
+                    df_q = df_q.set_index('ID')
                     df_q = df_q.sort_values(by=['Unidade', 'Data_Pura', 'Médico', 'Data/Hora'])
                     
-                    # O segredo: st.data_editor retorna os dados editados
+                    # Exibição do Editor
+                    # Removemos Data_Pura da visão, mas o ID (index) fica para referência
                     edited_df = st.data_editor(
-                        df_q.drop(columns=["ID", "Data_Pura"]), # Esconde colunas técnicas
+                        df_q.drop(columns=["Data_Pura"]),
                         column_config={
                             "Data/Hora": st.column_config.DatetimeColumn("Data/Hora", format="DD/MM/YYYY HH:mm"),
                             "WhatsApp Link": st.column_config.LinkColumn("📱 Link Direto", display_text="https://wa.me"),
                             "Confirmado?": st.column_config.CheckboxColumn("✅ Marcar ao Enviar")
                         },
                         use_container_width=True,
-                        hide_index=True,
+                        hide_index=False, # Mantemos visível para segurança, ou oculte via CSS
                         key=f"editor_{titulo.replace(' ', '_')}"
                     )
 
-                    # Lógica para salvar automaticamente se houver mudança
-                    # Nota: O ideal é um botão de "Salvar" geral para evitar muitas chamadas ao banco
+                    # Botão de Salvar Específico do Quadro
                     if st.button(f"💾 Salvar Confirmações - {titulo}"):
-                        for index, row in edited_df.iterrows():
-                            # Pega o ID original através do índice do DataFrame original
-                            original_id = df_q.iloc[index]['ID']
-                            novo_status = row['Confirmado?']
+                        try:
+                            contador = 0
+                            # Percorre o editor usando o ID original como chave
+                            for original_id, row in edited_df.iterrows():
+                                novo_status = row['Confirmado?']
+                                
+                                # Atualiza o status no Supabase
+                                supabase.table("CONSULTAS")\
+                                    .update({"confirmado": novo_status})\
+                                    .eq("id", original_id)\
+                                    .execute()
+                                contador += 1
                             
-                            # Atualiza no Supabase
-                            supabase.table("CONSULTAS").update({"confirmado": novo_status}).eq("id", original_id).execute()
-                        
-                        st.success(f"Alterações de {titulo} salvas!")
-                        st.rerun()
+                            st.success(f"✅ {contador} registros de {titulo} salvos com sucesso!")
+                            st.rerun()
+                        except Exception as e:
+                            st.error(f"Erro ao salvar no banco: {e}")
                 else:
-                    st.info("Sem agendamentos.")
+                    st.info(f"Sem agendamentos futuros para este grupo.")
                 st.divider()
 
+            # 🔹 EXECUÇÃO DOS 3 QUADROS
             renderizar_quadro("🏢 Quadro 1 - Eldorado", unidades_q1)
             renderizar_quadro("🏢 Quadro 2 - Pç 7 (Carijós)", unidades_q2)
             renderizar_quadro("🏢 Quadro 3 - Pç 7 (Rio de Janeiro)", unidades_q3)
+            
         else:
             st.info("Não há consultas marcadas para o futuro.")
 
