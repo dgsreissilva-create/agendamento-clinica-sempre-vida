@@ -357,9 +357,9 @@ elif menu == "4. Relatório de Agendamentos":
                 st.divider()
 
             # 🔹 EXECUÇÃO DOS 3 QUADROS
-            renderizar_quadro("🏢 Quadro 1 - Eldorado", unidades_q1)
-            renderizar_quadro("🏢 Quadro 2 - Pç 7 (Carijós)", unidades_q2)
-            renderizar_quadro("🏢 Quadro 3 - Pç 7 (Rio de Janeiro)", unidades_q3)
+            renderizar_quadro("🏢 Eldorado", unidades_q1)
+            renderizar_quadro("🏢 Pç 7 (Carijós)", unidades_q2)
+            renderizar_quadro("🏢 Pç 7 (Rio de Janeiro)", unidades_q3)
             
         else:
             st.info("Não há consultas marcadas para o futuro.")
