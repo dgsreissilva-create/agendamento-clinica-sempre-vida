@@ -368,17 +368,61 @@ elif menu == "4. Relatório de Agendamentos":
 
 
 
-# TELA 5 - CANCELAR CONSULTA
+# TELA 5 - CANCELAR CONSULTA (DATA BRASIL E NOME DO MÉDICO)
 elif menu == "5. Cancelar Consulta":
     if verificar_senha():
         st.header("🚫 Cancelar Consulta")
-        dados = buscar_todos("CONSULTAS", filtros=[("status", "Marcada")])
+        
+        # 🔒 Busca estendida para garantir que todos os agendamentos futuros apareçam
+        # Incluímos o JOIN com MEDICOS para pegar o nome do profissional
+        dados_res = supabase.table("CONSULTAS")\
+            .select("*, MEDICOS(*)")\
+            .eq("status", "Marcada")\
+            .limit(10000)\
+            .execute()
+        
+        dados = dados_res.data
+        
         if dados:
-            op = {f"{r['paciente_nome']} | {r['data_hora']}": r['id'] for r in dados}
-            sel = st.selectbox("Selecione o agendamento para cancelar:", list(op.keys()))
+            opcoes = {}
+            for r in dados:
+                m = r.get('MEDICOS') or r.get('medicos') or {}
+                # Ajuste da Data para padrão Brasil
+                dt_obj = pd.to_datetime(r['data_hora'])
+                data_br = dt_obj.strftime('%d/%m/%Y %H:%M')
+                
+                nome_paciente = r.get('paciente_nome') or "Paciente s/ nome"
+                nome_medico = m.get('nome') or "Médico s/ nome"
+                
+                # Criando o texto de exibição: Paciente | Data | Médico
+                texto_display = f"👤 {nome_paciente.upper()} | 📅 {data_br} | 👨‍⚕️ {nome_medico}"
+                opcoes[texto_display] = r['id']
+            
+            # Seletor com as informações organizadas
+            selecionado = st.selectbox("Selecione o agendamento para cancelar:", list(opcoes.keys()))
+            id_cancelar = opcoes[selecionado]
+            
             if st.button("Confirmar Cancelamento"):
-                supabase.table("CONSULTAS").update({"status": "Livre", "paciente_nome": None, "paciente_telefone": None}).eq("id", op[sel]).execute()
-                st.success("Cancelado!"); st.rerun()
+                # 🔒 Executa o cancelamento limpando os dados do paciente e voltando o status para Livre
+                # Limpamos também sobrenome e convênio para a vaga ficar totalmente nova
+                res = supabase.table("CONSULTAS").update({
+                    "status": "Livre", 
+                    "paciente_nome": None, 
+                    "paciente_sobrenome": None,
+                    "paciente_telefone": None,
+                    "paciente_convenio": None,
+                    "confirmado": False
+                }).eq("id", id_cancelar).execute()
+                
+                if res.data:
+                    st.success(f"✅ O agendamento foi cancelado e o horário está livre novamente!")
+                    st.rerun()
+                else:
+                    st.error("Erro ao processar o cancelamento. Tente novamente.")
+        else:
+            st.info("Não há consultas marcadas no momento para realizar cancelamentos.")
+
+
 
 
 
