@@ -249,13 +249,13 @@ elif menu == "3. Marcar Consulta":
 
 
 
-# TELA 4 - RELATÓRIO DE CONSULTAS FUTURAS (CORREÇÃO DE UNIDADE ELDORADO)
+# TELA 4 - RELATÓRIO DE CONSULTAS FUTURAS (COM GRAVAÇÃO DE CONFIRMAÇÃO)
 elif menu == "4. Relatório de Agendamentos":
     if verificar_senha():
         st.header("📋 Controle de Confirmações")
         agora = dt_lib.datetime.now()
 
-        # 🔒 BUSCA DIRETA E COMPLETA NO BANCO (LIMIT 10.000 PARA NÃO SUMIR NADA)
+        # 🔒 BUSCA DIRETA
         dados_res = supabase.table("CONSULTAS") \
             .select("*, MEDICOS(*)") \
             .eq("status", "Marcada") \
@@ -275,53 +275,37 @@ elif menu == "4. Relatório de Agendamentos":
                 pac = f"{r.get('paciente_nome','')} {r.get('paciente_sobrenome','')}".strip()
                 tel_limpo = ''.join(filter(str.isdigit, str(r.get('paciente_telefone', ''))))
                 
-                msg = (
-                    f"Olá, Gentileza Confirmar consulta Dr.(a) "
-                    f"{m.get('nome')} / {m.get('especialidade')} / "
-                    f"{dt_vaga.strftime('%d/%m/%Y %H:%M')} / {m.get('unidade')}"
-                )
-
-                link_zap = (
-                    f"https://wa.me/55{tel_limpo}?text={msg.replace(' ', '%20')}"
-                    if tel_limpo else ""
-                )
+                msg = f"Olá, Gentileza Confirmar consulta Dr.(a) {m.get('nome')} / {m.get('especialidade')} / {dt_vaga.strftime('%d/%m/%Y %H:%M')} / {m.get('unidade')}"
+                link_zap = f"https://wa.me/55{tel_limpo}?text={msg.replace(' ', '%20')}" if tel_limpo else ""
 
                 rel.append({
+                    "ID": r['id'], # Adicionado ID oculto para o banco saber qual linha atualizar
                     "Unidade": m.get('unidade'),
                     "Data/Hora": dt_vaga,
                     "Médico": m.get('nome'),
                     "Paciente": pac,
                     "Telefone": r.get('paciente_telefone'),
                     "WhatsApp Link": link_zap,
-                    "Confirmado?": False,
+                    "Confirmado?": r.get('confirmado', False), # Busca o status real do banco
                     "Data_Pura": dt_vaga.date()
                 })
 
             df_total = pd.DataFrame(rel)
 
-            # 🔹 DEFINIÇÃO DOS GRUPOS (Ajustado para capturar variações de escrita)
-            # Adicionei as duas formas de escrita para a unidade de Eldorado 4408
-            unidades_q1 = [
-                "Eldorado Av Jose Faria da Rocha 4408 2 andar", 
-                "Eldorado Av Jose Faria da Rocha 4408 2 and",
-                "Eldorado Av Jose Faria da Rocha 5959"
-            ]
+            unidades_q1 = ["Eldorado Av Jose Faria da Rocha 4408 2 andar", "Eldorado Av Jose Faria da Rocha 4408 2 and", "Eldorado Av Jose Faria da Rocha 5959"]
             unidades_q2 = ["Pç 7 Rua Carijos 424 SL 2213"]
             unidades_q3 = ["Pç 7 Rua Rio de Janeiro 462 SL 303"]
 
             def renderizar_quadro(titulo, lista_unidades):
-                # Filtra o DataFrame pelas unidades da lista
                 df_q = df_total[df_total['Unidade'].isin(lista_unidades)]
-                
                 st.subheader(titulo)
+                
                 if not df_q.empty:
-                    # Ordenação solicitada
                     df_q = df_q.sort_values(by=['Unidade', 'Data_Pura', 'Médico', 'Data/Hora'])
                     
-                    colunas = ["Unidade", "Data/Hora", "Médico", "Paciente", "Telefone", "WhatsApp Link", "Confirmado?"]
-                    
-                    st.data_editor(
-                        df_q[colunas],
+                    # O segredo: st.data_editor retorna os dados editados
+                    edited_df = st.data_editor(
+                        df_q.drop(columns=["ID", "Data_Pura"]), # Esconde colunas técnicas
                         column_config={
                             "Data/Hora": st.column_config.DatetimeColumn("Data/Hora", format="DD/MM/YYYY HH:mm"),
                             "WhatsApp Link": st.column_config.LinkColumn("📱 Link Direto", display_text="https://wa.me"),
@@ -331,11 +315,24 @@ elif menu == "4. Relatório de Agendamentos":
                         hide_index=True,
                         key=f"editor_{titulo.replace(' ', '_')}"
                     )
+
+                    # Lógica para salvar automaticamente se houver mudança
+                    # Nota: O ideal é um botão de "Salvar" geral para evitar muitas chamadas ao banco
+                    if st.button(f"💾 Salvar Confirmações - {titulo}"):
+                        for index, row in edited_df.iterrows():
+                            # Pega o ID original através do índice do DataFrame original
+                            original_id = df_q.iloc[index]['ID']
+                            novo_status = row['Confirmado?']
+                            
+                            # Atualiza no Supabase
+                            supabase.table("CONSULTAS").update({"confirmado": novo_status}).eq("id", original_id).execute()
+                        
+                        st.success(f"Alterações de {titulo} salvas!")
+                        st.rerun()
                 else:
-                    st.info("Sem agendamentos confirmados para este grupo.")
+                    st.info("Sem agendamentos.")
                 st.divider()
 
-            # 🔹 RENDERIZAÇÃO
             renderizar_quadro("🏢 Quadro 1 - Eldorado", unidades_q1)
             renderizar_quadro("🏢 Quadro 2 - Pç 7 (Carijós)", unidades_q2)
             renderizar_quadro("🏢 Quadro 3 - Pç 7 (Rio de Janeiro)", unidades_q3)
