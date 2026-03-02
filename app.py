@@ -130,7 +130,120 @@ elif menu == "2. Abertura de Agenda":
 
 
 
+# TELA 3 - MARCAR CONSULTA (VERSÃO CORRIGIDA COM MENSAGEM DE SUCESSO EXTERNA)
+elif menu == "3. Marcar Consulta":
+    st.header("📅 Agendamento de Consultas")
 
+    # Inicializa variáveis de estado para o controle do sucesso
+    if "agendamento_ok" not in st.session_state:
+        st.session_state.agendamento_ok = False
+    if "dados_confirmacao" not in st.session_state:
+        st.session_state.dados_confirmacao = None
+    if "bloqueio" not in st.session_state:
+        st.session_state.bloqueio = False
+
+    # 🔹 SE O AGENDAMENTO FOI FEITO COM SUCESSO, MOSTRA A MENSAGEM E O BOTÃO OK
+    if st.session_state.agendamento_ok:
+        d = st.session_state.dados_confirmacao
+        st.success(f"""
+        ### ✅ Agendamento Realizado com Sucesso!
+        
+        **Médico:** {d['medico']}  
+        **Especialidade:** {d['especialidade']}  
+        **Data/Hora:** {d['horario']}  
+        **Local:** {d['unidade']}
+        """)
+        
+        if st.button("👍 OK, Próximo Agendamento"):
+            st.session_state.agendamento_ok = False
+            st.session_state.dados_confirmacao = None
+            st.rerun()
+            
+    # 🔹 CASO CONTRÁRIO, MOSTRA O FLUXO NORMAL DE AGENDAMENTO
+    else:
+        # 1️⃣ Busca Médicos
+        medicos_res = supabase.table("MEDICOS").select("*").execute()
+        medicos = medicos_res.data
+
+        if medicos:
+            df_med = pd.DataFrame(medicos)
+            u_sel = st.selectbox("1. Escolha a Unidade", sorted(df_med['unidade'].unique()))
+            df_u = df_med[df_med['unidade'] == u_sel]
+
+            esp_sel = st.selectbox("2. Escolha a Especialidade", sorted(df_u['especialidade'].unique()))
+            df_esp = df_u[df_u['especialidade'] == esp_sel]
+
+            m_sel = st.selectbox("3. Escolha o Médico", sorted(df_esp['nome'].unique()))
+            medico_id = df_esp[df_esp['nome'] == m_sel].iloc[0]['id']
+
+            # 2️⃣ Busca Horários Livres (Limite 10k para evitar cortes)
+            consultas_res = supabase.table("CONSULTAS") \
+                .select("*") \
+                .eq("medico_id", medico_id) \
+                .eq("status", "Livre") \
+                .order("data_hora") \
+                .limit(10000) \
+                .execute()
+
+            consultas = consultas_res.data
+
+            if consultas:
+                horarios = []
+                for c in consultas:
+                    dt = pd.to_datetime(c['data_hora'])
+                    horarios.append({"id": c['id'], "display": dt.strftime('%d/%m/%Y %H:%M')})
+
+                df_h = pd.DataFrame(horarios)
+                h_sel = st.selectbox("4. Escolha o Horário", df_h['display'].tolist())
+                id_vaga = df_h[df_h['display'] == h_sel].iloc[0]['id']
+
+                # FORMULÁRIO DE PACIENTE
+                with st.form("form_paciente", clear_on_submit=True):
+                    c1, c2 = st.columns(2)
+                    pn = c1.text_input("Nome")
+                    ps = c1.text_input("Sobrenome")
+                    pt = c2.text_input("WhatsApp")
+                    pc = c2.text_input("Convênio")
+
+                    submit = st.form_submit_button("Finalizar Agendamento")
+
+                    if submit:
+                        if st.session_state.bloqueio:
+                            st.warning("⏳ Processando...")
+                            st.stop()
+
+                        if pn and pt:
+                            st.session_state.bloqueio = True
+                            
+                            # Update no Banco de Dados
+                            resposta = supabase.table("CONSULTAS").update({
+                                "paciente_nome": pn.upper(),
+                                "paciente_sobrenome": ps.upper(),
+                                "paciente_telefone": pt,
+                                "paciente_convenio": pc.upper() if pc else "PARTICULAR",
+                                "status": "Marcada"
+                            }).eq("id", id_vaga).eq("status", "Livre").execute()
+
+                            if resposta.data:
+                                # Salva os dados para mostrar a confirmação fora do form
+                                st.session_state.dados_confirmacao = {
+                                    "medico": m_sel,
+                                    "especialidade": esp_sel,
+                                    "horario": h_sel,
+                                    "unidade": u_sel
+                                }
+                                st.session_state.agendamento_ok = True
+                                st.session_state.bloqueio = False
+                                st.rerun()
+                            else:
+                                st.session_state.bloqueio = False
+                                st.error("⚠️ Horário ocupado ou indisponível.")
+                        else:
+                            st.warning("⚠️ Preencha Nome e WhatsApp!")
+            else:
+                st.info("Este médico não possui horários livres.")
+        else:
+            st.error("Nenhum médico cadastrado.")
 
 
 
