@@ -148,7 +148,7 @@ elif menu == "3. Marcar Consulta":
         st.success(f"""
         ### ✅ Agendamento Realizado com Sucesso!
         
-        **Médico:** {d['medico']}  
+        **Profissional:** {d['medico']}  
         **Especialidade:** {d['especialidade']}  
         **Data/Hora:** {d['horario']}  
         **Local:** {d['unidade']}
