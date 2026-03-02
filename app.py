@@ -129,61 +129,66 @@ elif menu == "2. Abertura de Agenda":
 
 
 
-# TELA 3 - MARCAR CONSULTA (VERSÃO COMPLETA: SEM LIMITES E COM MÉDICO EXCLUÍDO)
+# TELA 3 - MARCAR CONSULTA (VERSÃO FINAL UNIFICADA E BLINDADA)
 elif menu == "3. Marcar Consulta":
     st.header("📅 Agendamento de Consultas")
 
     if "bloqueio" not in st.session_state:
         st.session_state.bloqueio = False
 
-    # 🔒 BUSCA SEM LIMITES (10.000) E COM JOIN DE MÉDICOS
-    # Isso garante que especialidades do final da lista (G, O, P, Z) apareçam
+    # 🔹 1️⃣ BUSCA TODAS AS CONSULTAS LIVRES (GARANTE QUE GRADES NOVAS APAREÇAM)
+    # Usamos limit(10000) para evitar o corte de especialidades no final da lista
     consultas_res = supabase.table("CONSULTAS") \
         .select("*, MEDICOS(*)") \
         .eq("status", "Livre") \
         .limit(10000) \
         .execute()
 
-    dados = consultas_res.data
+    dados_consultas = consultas_res.data
 
-    if dados:
+    if dados_consultas:
+        # Criamos uma lista para filtrar Unidade -> Especialidade -> Médico
         v_list = []
-        for r in dados:
-            # Tenta pegar os dados do médico ativo
-            m = r.get('MEDICOS') or r.get('medicos')
+        for c in dados_consultas:
+            m = c.get('MEDICOS') or c.get('medicos')
             
-            # TRATAMENTO PARA MÉDICO EXCLUÍDO (Recupera a grade que estava "sumida")
-            # Se o médico sumiu da tabela MEDICOS, usamos o que sobrou na CONSULTA
-            nome_medico = str(m['nome'] if m else r.get('medico_nome', 'MÉDICO ID ANTIGO')).strip().upper()
-            unidade = str(m['unidade'] if m else r.get('unidade', 'UNIDADE NÃO IDENTIFICADA')).strip().upper()
-            especialidade = str(m['especialidade'] if m else r.get('especialidade', 'GERAL')).strip().upper()
+            # Se o médico existe, pegamos os dados dele. 
+            # Se foi excluído, usamos o que restou na consulta para não "sumir" com a grade.
+            nome_medico = str(m['nome'] if m else c.get('medico_nome', 'Médico ID Antigo')).strip().title()
+            unidade = str(m['unidade'] if m else c.get('unidade', 'Unidade Indefinida')).strip().title()
+            especialidade = str(m['especialidade'] if m else c.get('especialidade', 'Geral')).strip().title()
             
-            dt = pd.to_datetime(r['data_hora'])
-            
+            dt = pd.to_datetime(c['data_hora'])
             v_list.append({
-                'id': r['id'],
+                'id': c['id'],
                 'unidade': unidade,
                 'especialidade': especialidade,
                 'medico': nome_medico,
                 'display': dt.strftime('%d/%m/%Y %H:%M'),
-                'sort': r['data_hora']
+                'sort': c['data_hora']
             })
 
         df = pd.DataFrame(v_list).sort_values('sort')
 
-        # --- FILTROS (VISUAL ORIGINAL) ---
+        # --- FILTROS SEQUENCIAIS (ESTRUTURA ORIGINAL PRESERVADA) ---
+        
+        # 1. Unidade
         u_sel = st.selectbox("1. Escolha a Unidade", sorted(df['unidade'].unique()))
         df_u = df[df['unidade'] == u_sel]
 
+        # 2. Especialidade
         esp_sel = st.selectbox("2. Escolha a Especialidade", sorted(df_u['especialidade'].unique()))
         df_esp = df_u[df_u['especialidade'] == esp_sel]
 
+        # 3. Médico
         m_sel = st.selectbox("3. Escolha o Médico", sorted(df_esp['medico'].unique()))
         df_m = df_esp[df_esp['medico'] == m_sel]
 
+        # 4. Horário
         h_sel = st.selectbox("4. Escolha o Horário", df_m['display'].tolist())
         id_vaga = df_m[df_m['display'] == h_sel].iloc[0]['id']
 
+        # 🔹 2️⃣ FORMULÁRIO DE PACIENTE
         with st.form("form_paciente", clear_on_submit=True):
             c1, c2 = st.columns(2)
             pn = c1.text_input("Nome")
@@ -201,12 +206,13 @@ elif menu == "3. Marcar Consulta":
                 if pn and pt:
                     st.session_state.bloqueio = True
                     
+                    # 🔐 UPDATE COM VALIDAÇÃO DE STATUS
                     resposta = supabase.table("CONSULTAS") \
                         .update({
-                            "paciente_nome": pn.upper(),
-                            "paciente_sobrenome": ps.upper(),
+                            "paciente_nome": pn.title(),
+                            "paciente_sobrenome": ps.title(),
                             "paciente_telefone": pt,
-                            "paciente_convenio": pc.upper(),
+                            "paciente_convenio": pc.upper() if pc else "PARTICULAR",
                             "status": "Marcada"
                         }) \
                         .eq("id", id_vaga) \
@@ -214,18 +220,17 @@ elif menu == "3. Marcar Consulta":
                         .execute()
 
                     if resposta.data and len(resposta.data) > 0:
-                        st.success("✅ Agendada com sucesso!")
+                        st.success(f"✅ Agendada com sucesso!")
                         st.session_state.bloqueio = False
                         st.rerun()
                     else:
                         st.session_state.bloqueio = False
-                        st.error("⚠️ Horário ocupado ou removido.")
+                        st.error("⚠️ Horário não disponível. Tente outro.")
                         st.rerun()
                 else:
                     st.warning("⚠️ Nome e WhatsApp são obrigatórios!")
     else:
-        st.info("Não há horários 'Livres' cadastrados.")
-
+        st.info("Não há horários 'Livres' disponíveis no momento.")
 
 
 
