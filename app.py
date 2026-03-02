@@ -227,7 +227,7 @@ elif menu == "3. Marcar Consulta":
                             if resposta.data:
                                 # Salva os dados para mostrar a confirmação fora do form
                                 st.session_state.dados_confirmacao = {
-                                    "medico": m_sel,
+                                    "Profissional": m_sel,
                                     "especialidade": esp_sel,
                                     "horario": h_sel,
                                     "unidade": u_sel
