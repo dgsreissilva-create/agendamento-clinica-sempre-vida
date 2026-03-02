@@ -129,123 +129,111 @@ elif menu == "2. Abertura de Agenda":
 
 
 
-
-# TELA 3 - MARCAR CONSULTA (MOSTRA TODOS MÉDICOS)
-
+# TELA 3 - MARCAR CONSULTA (VERSÃO FINAL: RECUPERAÇÃO DE GRADES ÓRFÃS)
 elif menu == "3. Marcar Consulta":
     st.header("📅 Agendamento de Consultas")
 
     if "bloqueio" not in st.session_state:
         st.session_state.bloqueio = False
 
-    # 🔹 1️⃣ BUSCA TODOS OS MÉDICOS
-    medicos_res = supabase.table("MEDICOS").select("*").execute()
-    medicos = medicos_res.data
+    # 1️⃣ BUSCA TODAS AS CONSULTAS LIVRES (Com limite de 10.000 para não sumir nada)
+    # Puxamos os dados do médico vinculado (se existir)
+    consultas_res = supabase.table("CONSULTAS") \
+        .select("*, MEDICOS(*)") \
+        .eq("status", "Livre") \
+        .limit(10000) \
+        .execute()
 
-    if medicos:
+    dados = consultas_res.data
 
-        df_med = pd.DataFrame(medicos)
+    if dados:
+        v_list = []
+        for r in dados:
+            # Tenta pegar os dados do médico ativo
+            m = r.get('MEDICOS') or r.get('medicos')
+            
+            # 🚨 TRATAMENTO DEFINITIVO PARA MÉDICO EXCLUÍDO:
+            # Se 'm' existe, usamos o cadastro atual. 
+            # Se 'm' não existe (ID excluído), usamos o nome que sobrou na consulta ou um aviso.
+            nome_medico = str(m['nome'] if m else r.get('medico_nome', 'MÉDICO ID ANTIGO')).strip().upper()
+            unidade = str(m['unidade'] if m else r.get('unidade', 'UNIDADE NÃO IDENTIFICADA')).strip().upper()
+            especialidade = str(m['especialidade'] if m else r.get('especialidade', 'GERAL')).strip().upper()
+            
+            dt = pd.to_datetime(r['data_hora'])
+            
+            v_list.append({
+                'id': r['id'],
+                'unidade': unidade,
+                'especialidade': especialidade,
+                'medico': nome_medico,
+                'display': dt.strftime('%d/%m/%Y %H:%M'),
+                'sort': r['data_hora']
+            })
 
-        # 1. Unidade
-        u_sel = st.selectbox(
-            "1. Escolha a Unidade",
-            sorted(df_med['unidade'].unique())
-        )
-        df_u = df_med[df_med['unidade'] == u_sel]
+        df = pd.DataFrame(v_list).sort_values('sort')
 
-        # 2. Especialidade
-        esp_sel = st.selectbox(
-            "2. Escolha a Especialidade",
-            sorted(df_u['especialidade'].unique())
-        )
+        # --- FILTROS SEQUENCIAIS (VISUAL PRESERVADO) ---
+        # 1. Escolha a Unidade
+        unidades_disponiveis = sorted(df['unidade'].unique())
+        u_sel = st.selectbox("1. Escolha a Unidade", unidades_disponiveis)
+        df_u = df[df['unidade'] == u_sel]
+
+        # 2. Escolha a Especialidade
+        especialidades_disponiveis = sorted(df_u['especialidade'].unique())
+        esp_sel = st.selectbox("2. Escolha a Especialidade", especialidades_disponiveis)
         df_esp = df_u[df_u['especialidade'] == esp_sel]
 
-        # 3. Médico
-        m_sel = st.selectbox(
-            "3. Escolha o Médico",
-            sorted(df_esp['nome'].unique())
-        )
+        # 3. Escolha o Médico (Aqui aparecerá o Dr. Ricardo novo e o antigo se tiverem o mesmo nome)
+        medicos_disponiveis = sorted(df_esp['medico'].unique())
+        m_sel = st.selectbox("3. Escolha o Médico", medicos_disponiveis)
+        df_m = df_esp[df_esp['medico'] == m_sel]
 
-        medico_id = df_esp[df_esp['nome'] == m_sel].iloc[0]['id']
+        # 4. Escolha o Horário
+        h_sel = st.selectbox("4. Escolha o Horário", df_m['display'].tolist())
+        id_vaga = df_m[df_m['display'] == h_sel].iloc[0]['id']
 
-        # 🔹 2️⃣ BUSCA HORÁRIOS LIVRES APENAS DO MÉDICO SELECIONADO
-        consultas_res = supabase.table("CONSULTAS") \
-            .select("*") \
-            .eq("medico_id", medico_id) \
-            .eq("status", "Livre") \
-            .order("data_hora") \
-            .execute()
+        with st.form("form_paciente", clear_on_submit=True):
+            c1, c2 = st.columns(2)
+            pn = c1.text_input("Nome")
+            ps = c1.text_input("Sobrenome")
+            pt = c2.text_input("WhatsApp")
+            pc = c2.text_input("Convênio")
 
-        consultas = consultas_res.data
+            submit = st.form_submit_button("Finalizar Agendamento")
 
-        if consultas:
+            if submit:
+                if st.session_state.bloqueio:
+                    st.warning("⏳ Processando...")
+                    st.stop()
 
-            horarios = []
-            for c in consultas:
-                dt = pd.to_datetime(c['data_hora'])
-                horarios.append({
-                    "id": c['id'],
-                    "display": dt.strftime('%d/%m/%Y %H:%M')
-                })
+                if pn and pt:
+                    st.session_state.bloqueio = True
+                    
+                    # 🔐 UPDATE COM DUPLA VALIDAÇÃO (STATUS LIVRE E ID)
+                    resposta = supabase.table("CONSULTAS") \
+                        .update({
+                            "paciente_nome": pn.upper(),
+                            "paciente_sobrenome": ps.upper(),
+                            "paciente_telefone": pt,
+                            "paciente_convenio": pc.upper(),
+                            "status": "Marcada"
+                        }) \
+                        .eq("id", id_vaga) \
+                        .eq("status", "Livre") \
+                        .execute()
 
-            df_h = pd.DataFrame(horarios)
-
-            h_sel = st.selectbox(
-                "4. Escolha o Horário",
-                df_h['display'].tolist()
-            )
-
-            id_vaga = df_h[df_h['display'] == h_sel].iloc[0]['id']
-
-            with st.form("form_paciente", clear_on_submit=True):
-
-                c1, c2 = st.columns(2)
-                pn = c1.text_input("Nome")
-                ps = c1.text_input("Sobrenome")
-                pt = c2.text_input("WhatsApp")
-                pc = c2.text_input("Convênio")
-
-                submit = st.form_submit_button("Finalizar Agendamento")
-
-                if submit:
-
-                    if st.session_state.bloqueio:
-                        st.warning("⏳ Processando...")
-                        st.stop()
-
-                    if pn and pt:
-
-                        st.session_state.bloqueio = True
-
-                        resposta = supabase.table("CONSULTAS") \
-                            .update({
-                                "paciente_nome": pn,
-                                "paciente_sobrenome": ps,
-                                "paciente_telefone": pt,
-                                "paciente_convenio": pc,
-                                "status": "Marcada"
-                            }) \
-                            .eq("id", id_vaga) \
-                            .eq("status", "Livre") \
-                            .execute()
-
-                        if resposta.data and len(resposta.data) > 0:
-                            st.success("✅ Agendada com sucesso!")
-                            st.session_state.bloqueio = False
-                            st.rerun()
-                        else:
-                            st.session_state.bloqueio = False
-                            st.error("⚠️ Horário ocupado. Escolha outro.")
-                            st.rerun()
+                    if resposta.data and len(resposta.data) > 0:
+                        st.success("✅ Agendada com sucesso!")
+                        st.session_state.bloqueio = False
+                        st.rerun()
                     else:
-                        st.warning("⚠️ Nome e WhatsApp são obrigatórios!")
-
-        else:
-            st.info("Este médico não possui horários livres no momento.")
-
+                        st.session_state.bloqueio = False
+                        st.error("⚠️ Este horário não está mais disponível.")
+                        st.rerun()
+                else:
+                    st.warning("⚠️ Nome e WhatsApp são obrigatórios!")
     else:
-        st.error("Nenhum médico cadastrado.")
-
+        st.info("Não há horários 'Livres' cadastrados no sistema.")
 
 
 # TELA 4 - RELATÓRIO DE CONSULTAS FUTURAS (VERSÃO BLINDADA E ESTÁVEL)
