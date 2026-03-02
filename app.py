@@ -130,8 +130,7 @@ elif menu == "2. Abertura de Agenda":
 
 
 
-# TELA 3 - MARCAR CONSULTA (MOSTRA TODOS MÉDICOS)
-
+# TELA 3 - MARCAR CONSULTA (ESTRUTURA ORIGINAL + MENSAGEM DETALHADA)
 elif menu == "3. Marcar Consulta":
     st.header("📅 Agendamento de Consultas")
 
@@ -143,43 +142,32 @@ elif menu == "3. Marcar Consulta":
     medicos = medicos_res.data
 
     if medicos:
-
         df_med = pd.DataFrame(medicos)
 
         # 1. Unidade
-        u_sel = st.selectbox(
-            "1. Escolha a Unidade",
-            sorted(df_med['unidade'].unique())
-        )
+        u_sel = st.selectbox("1. Escolha a Unidade", sorted(df_med['unidade'].unique()))
         df_u = df_med[df_med['unidade'] == u_sel]
 
         # 2. Especialidade
-        esp_sel = st.selectbox(
-            "2. Escolha a Especialidade",
-            sorted(df_u['especialidade'].unique())
-        )
+        esp_sel = st.selectbox("2. Escolha a Especialidade", sorted(df_u['especialidade'].unique()))
         df_esp = df_u[df_u['especialidade'] == esp_sel]
 
         # 3. Médico
-        m_sel = st.selectbox(
-            "3. Escolha o Médico",
-            sorted(df_esp['nome'].unique())
-        )
-
+        m_sel = st.selectbox("3. Escolha o Médico", sorted(df_esp['nome'].unique()))
         medico_id = df_esp[df_esp['nome'] == m_sel].iloc[0]['id']
 
-        # 🔹 2️⃣ BUSCA HORÁRIOS LIVRES APENAS DO MÉDICO SELECIONADO
+        # 🔹 2️⃣ BUSCA HORÁRIOS LIVRES (Aumentado o limite para 10.000)
         consultas_res = supabase.table("CONSULTAS") \
             .select("*") \
             .eq("medico_id", medico_id) \
             .eq("status", "Livre") \
             .order("data_hora") \
+            .limit(10000) \
             .execute()
 
         consultas = consultas_res.data
 
         if consultas:
-
             horarios = []
             for c in consultas:
                 dt = pd.to_datetime(c['data_hora'])
@@ -189,16 +177,10 @@ elif menu == "3. Marcar Consulta":
                 })
 
             df_h = pd.DataFrame(horarios)
-
-            h_sel = st.selectbox(
-                "4. Escolha o Horário",
-                df_h['display'].tolist()
-            )
-
+            h_sel = st.selectbox("4. Escolha o Horário", df_h['display'].tolist())
             id_vaga = df_h[df_h['display'] == h_sel].iloc[0]['id']
 
             with st.form("form_paciente", clear_on_submit=True):
-
                 c1, c2 = st.columns(2)
                 pn = c1.text_input("Nome")
                 ps = c1.text_input("Sobrenome")
@@ -208,21 +190,18 @@ elif menu == "3. Marcar Consulta":
                 submit = st.form_submit_button("Finalizar Agendamento")
 
                 if submit:
-
                     if st.session_state.bloqueio:
                         st.warning("⏳ Processando...")
                         st.stop()
 
                     if pn and pt:
-
                         st.session_state.bloqueio = True
-
                         resposta = supabase.table("CONSULTAS") \
                             .update({
-                                "paciente_nome": pn,
-                                "paciente_sobrenome": ps,
+                                "paciente_nome": pn.upper(),
+                                "paciente_sobrenome": ps.upper(),
                                 "paciente_telefone": pt,
-                                "paciente_convenio": pc,
+                                "paciente_convenio": pc.upper() if pc else "PARTICULAR",
                                 "status": "Marcada"
                             }) \
                             .eq("id", id_vaga) \
@@ -230,22 +209,105 @@ elif menu == "3. Marcar Consulta":
                             .execute()
 
                         if resposta.data and len(resposta.data) > 0:
-                            st.success("✅ Agendada com sucesso!")
+                            # 📝 MENSAGEM DE SUCESSO DETALHADA
+                            st.success(f"""
+                            ### ✅ Agendamento Marcado!
+                            
+                            **Médico:** {m_sel}  
+                            **Especialidade:** {esp_sel}  
+                            **Data/Hora:** {h_sel}  
+                            **Local:** {u_sel}
+                            """)
+                            
                             st.session_state.bloqueio = False
-                            st.rerun()
+                            if st.button("👍 OK"):
+                                st.rerun()
+                            st.stop() 
                         else:
                             st.session_state.bloqueio = False
-                            st.error("⚠️ Horário ocupado. Escolha outro.")
+                            st.error("⚠️ Horário ocupado ou removido.")
                             st.rerun()
                     else:
                         st.warning("⚠️ Nome e WhatsApp são obrigatórios!")
-
         else:
             st.info("Este médico não possui horários livres no momento.")
-
     else:
         st.error("Nenhum médico cadastrado.")
 
+# TELA 4 - RELATÓRIO DE CONSULTAS FUTURAS (VERSÃO BLINDADA)
+elif menu == "4. Relatório de Agendamentos":
+    if verificar_senha():
+        st.header("📋 Confirmações De Agendas")
+        
+        agora_br = dt_lib.datetime.now()
+        hoje_inicio = agora_br.replace(hour=0, minute=0, second=0, microsecond=0)
+
+        dados_res = supabase.table("CONSULTAS") \
+            .select("*, MEDICOS(*)") \
+            .eq("status", "Marcada") \
+            .gte("data_hora", hoje_inicio.isoformat()) \
+            .order("id", desc=True) \
+            .limit(10000) \
+            .execute()
+
+        dados = dados_res.data
+
+        if dados:
+            rel = []
+            for r in dados:
+                m = r.get('MEDICOS') or r.get('medicos') or {}
+                dt_vaga = pd.to_datetime(r['data_hora'])
+                pac = f"{r.get('paciente_nome','')} {r.get('paciente_sobrenome','')}".strip()
+                tel_limpo = ''.join(filter(str.isdigit, str(r.get('paciente_telefone', ''))))
+                
+                msg = (f"Olá, Gentileza Confirmar consulta Dr.(a) "
+                       f"{m.get('nome')} / {m.get('especialidade')} / "
+                       f"{dt_vaga.strftime('%d/%m/%Y %H:%M')} / {m.get('unidade')}")
+
+                link_zap = (f"https://wa.me/55{tel_limpo}?text={msg.replace(' ', '%20')}" if tel_limpo else "")
+
+                rel.append({
+                    "ID": r['id'], "Unidade": m.get('unidade'), "Data/Hora": dt_vaga,
+                    "Médico": m.get('nome'), "Paciente": pac, "Telefone": r.get('paciente_telefone'),
+                    "WhatsApp Link": link_zap, "Confirmado?": r.get('confirmado', False),
+                    "Data_Pura": dt_vaga.date()
+                })
+
+            df_total = pd.DataFrame(rel)
+
+            unidades_q1 = ["Eldorado Av Jose Faria da Rocha 4408 2 andar", "Eldorado Av Jose Faria da Rocha 4408 2 and", "Eldorado Av Jose Faria da Rocha 5959"]
+            unidades_q2 = ["Pç 7 Rua Carijos 424 SL 2213"]
+            unidades_q3 = ["Pç 7 Rua Rio de Janeiro 462 SL 303"]
+
+            def renderizar_quadro(titulo, lista_unidades):
+                df_q = df_total[df_total['Unidade'].isin(lista_unidades)].copy()
+                st.subheader(titulo)
+                if not df_q.empty:
+                    df_q = df_q.set_index('ID').sort_values(by=['Unidade', 'Data_Pura', 'Médico', 'Data/Hora'])
+                    edited_df = st.data_editor(
+                        df_q.drop(columns=["Data_Pura"]),
+                        column_config={
+                            "Data/Hora": st.column_config.DatetimeColumn("Data/Hora", format="DD/MM/YYYY HH:mm"),
+                            "WhatsApp Link": st.column_config.LinkColumn("📱 Link Direto", display_text="https://wa.me"),
+                            "Confirmado?": st.column_config.CheckboxColumn("✅ Marcar ao Enviar")
+                        },
+                        use_container_width=True,
+                        key=f"editor_{titulo.replace(' ', '_')}"
+                    )
+                    if st.button(f"💾 Salvar Confirmações - {titulo}"):
+                        for original_id, row in edited_df.iterrows():
+                            supabase.table("CONSULTAS").update({"confirmado": row['Confirmado?']}).eq("id", original_id).execute()
+                        st.success(f"✅ Salvo!")
+                        st.rerun()
+                else:
+                    st.info(f"Sem agendamentos futuros.")
+                st.divider()
+
+            renderizar_quadro("🏢 Eldorado", unidades_q1)
+            renderizar_quadro("🏢 Pç 7 (Carijós)", unidades_q2)
+            renderizar_quadro("🏢 Pç 7 (Rio de Janeiro)", unidades_q3)
+        else:
+            st.info("Não há consultas marcadas.")
 
 
 # TELA 4 - RELATÓRIO DE CONSULTAS FUTURAS (VERSÃO BLINDADA E ESTÁVEL)
