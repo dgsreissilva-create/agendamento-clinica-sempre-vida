@@ -130,109 +130,10 @@ elif menu == "2. Abertura de Agenda":
 
 
 
-# TELA 3 - MARCAR CONSULTA (ESTRUTURA ORIGINAL + MENSAGEM DETALHADA)
-elif menu == "3. Marcar Consulta":
-    st.header("📅 Agendamento de Consultas")
 
-    if "bloqueio" not in st.session_state:
-        st.session_state.bloqueio = False
 
-    # 🔹 1️⃣ BUSCA TODOS OS MÉDICOS
-    medicos_res = supabase.table("MEDICOS").select("*").execute()
-    medicos = medicos_res.data
 
-    if medicos:
-        df_med = pd.DataFrame(medicos)
 
-        # 1. Unidade
-        u_sel = st.selectbox("1. Escolha a Unidade", sorted(df_med['unidade'].unique()))
-        df_u = df_med[df_med['unidade'] == u_sel]
-
-        # 2. Especialidade
-        esp_sel = st.selectbox("2. Escolha a Especialidade", sorted(df_u['especialidade'].unique()))
-        df_esp = df_u[df_u['especialidade'] == esp_sel]
-
-        # 3. Médico
-        m_sel = st.selectbox("3. Escolha o Médico", sorted(df_esp['nome'].unique()))
-        medico_id = df_esp[df_esp['nome'] == m_sel].iloc[0]['id']
-
-        # 🔹 2️⃣ BUSCA HORÁRIOS LIVRES (Aumentado o limite para 10.000)
-        consultas_res = supabase.table("CONSULTAS") \
-            .select("*") \
-            .eq("medico_id", medico_id) \
-            .eq("status", "Livre") \
-            .order("data_hora") \
-            .limit(10000) \
-            .execute()
-
-        consultas = consultas_res.data
-
-        if consultas:
-            horarios = []
-            for c in consultas:
-                dt = pd.to_datetime(c['data_hora'])
-                horarios.append({
-                    "id": c['id'],
-                    "display": dt.strftime('%d/%m/%Y %H:%M')
-                })
-
-            df_h = pd.DataFrame(horarios)
-            h_sel = st.selectbox("4. Escolha o Horário", df_h['display'].tolist())
-            id_vaga = df_h[df_h['display'] == h_sel].iloc[0]['id']
-
-            with st.form("form_paciente", clear_on_submit=True):
-                c1, c2 = st.columns(2)
-                pn = c1.text_input("Nome")
-                ps = c1.text_input("Sobrenome")
-                pt = c2.text_input("WhatsApp")
-                pc = c2.text_input("Convênio")
-
-                submit = st.form_submit_button("Finalizar Agendamento")
-
-                if submit:
-                    if st.session_state.bloqueio:
-                        st.warning("⏳ Processando...")
-                        st.stop()
-
-                    if pn and pt:
-                        st.session_state.bloqueio = True
-                        resposta = supabase.table("CONSULTAS") \
-                            .update({
-                                "paciente_nome": pn.upper(),
-                                "paciente_sobrenome": ps.upper(),
-                                "paciente_telefone": pt,
-                                "paciente_convenio": pc.upper() if pc else "PARTICULAR",
-                                "status": "Marcada"
-                            }) \
-                            .eq("id", id_vaga) \
-                            .eq("status", "Livre") \
-                            .execute()
-
-                        if resposta.data and len(resposta.data) > 0:
-                            # 📝 MENSAGEM DE SUCESSO DETALHADA
-                            st.success(f"""
-                            ### ✅ Agendamento Marcado!
-                            
-                            **Médico:** {m_sel}  
-                            **Especialidade:** {esp_sel}  
-                            **Data/Hora:** {h_sel}  
-                            **Local:** {u_sel}
-                            """)
-                            
-                            st.session_state.bloqueio = False
-                            if st.button("👍 OK"):
-                                st.rerun()
-                            st.stop() 
-                        else:
-                            st.session_state.bloqueio = False
-                            st.error("⚠️ Horário ocupado ou removido.")
-                            st.rerun()
-                    else:
-                        st.warning("⚠️ Nome e WhatsApp são obrigatórios!")
-        else:
-            st.info("Este médico não possui horários livres no momento.")
-    else:
-        st.error("Nenhum médico cadastrado.")
 
 # TELA 4 - RELATÓRIO DE CONSULTAS FUTURAS (VERSÃO BLINDADA)
 elif menu == "4. Relatório de Agendamentos":
