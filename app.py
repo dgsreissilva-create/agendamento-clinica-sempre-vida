@@ -121,15 +121,38 @@ elif menu == "2. Abertura de Agenda":
             hf = c3.time_input("Hora Final", value=dt_lib.time(18, 0))
             inter = st.number_input("Intervalo (minutos)", 5, 120, 20)
             
-            if st.button("Gerar Grade"):
-                vagas = []
-                t, fim = dt_lib.datetime.combine(d, hi), dt_lib.datetime.combine(d, hf)
-                while t < fim:
-                    vagas.append({"medico_id": op[sel], "data_hora": t.isoformat(), "status": "Livre"})
-                    t += dt_lib.timedelta(minutes=inter)
-                supabase.table("CONSULTAS").insert(vagas).execute()
-                st.success(f"✅ Grade criada com sucesso!")
 
+if st.button("Gerar Grade"):
+                # 1. DEFINIÇÃO DO PERÍODO
+                t, fim = dt_lib.datetime.combine(d, hi), dt_lib.datetime.combine(d, hf)
+                
+                # 2. TRAVA ANTI-DUPLICIDADE: Busca se já existem consultas para esse médico e data
+                # Isso evita que o clique duplo gere 40 horários repetidos
+                check = supabase.table("CONSULTAS").select("id") \
+                    .eq("medico_id", op[sel]) \
+                    .gte("data_hora", t.isoformat()) \
+                    .lte("data_hora", fim.isoformat()) \
+                    .execute()
+
+                if check.data:
+                    st.warning(f"⚠️ Atenção: Já existe uma grade aberta para este médico neste período!")
+                else:
+                    vagas = []
+                    while t < fim:
+                        vagas.append({
+                            "medico_id": op[sel], 
+                            "data_hora": t.isoformat(), 
+                            "status": "Livre"
+                        })
+                        t += dt_lib.timedelta(minutes=inter)
+                    
+                    if vagas:
+                        try:
+                            supabase.table("CONSULTAS").insert(vagas).execute()
+                            st.success(f"✅ Grade com {len(vagas)} horários criada com sucesso!")
+                            st.rerun()
+                        except Exception as e:
+                            st.error(f"Erro ao salvar no banco: {e}")
 
 
 
