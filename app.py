@@ -711,63 +711,78 @@ elif menu == "8. Relatório Gerencial":
 
 
 
+
+
+
+
+
 # ==========================================================
-# TELA 9: GESTÃO DINÂMICA DE ESPECIALIDADES (MODO ISOLADO)
+# TELA 9: GESTÃO DINÂMICA DE ESPECIALIDADES (FINALIZADA)
 # ==========================================================
 
-# Verificamos qual opção foi clicada no menu lateral sem dar erro de nome
+# Identifica a navegação sem conflito
 navegador = locals().get('menu') or locals().get('menu_selecionado') or locals().get('escolha')
 
 if navegador == "9. Gestão de Especialidades":
-    st.title("🛡️ Gestão de Especialidades")
-    st.markdown("---")
+    # 1. PROTEÇÃO POR SENHA (Igual às outras telas)
+    if "autenticado" not in st.session_state or not st.session_state["autenticado"]:
+        st.error("🔒 Acesso Restrito. Por favor, realize o login na Tela Inicial.")
+    else:
+        st.title("🛡️ Gestão de Especialidades")
+        st.write("Gerencie as categorias e unidades que aparecem nos filtros do sistema.")
+        st.markdown("---")
 
-    # Função interna (Fusão de especialidades)
-    def buscar_especialidades_t9():
-        try:
-            res = supabase.table("MEDICOS").select("especialidade").execute()
-            if res.data:
-                # set() faz a união dos nomes repetidos
-                bruto = [i['especialidade'] for i in res.data if i['especialidade']]
-                return sorted(list(set(bruto)))
-            return []
-        except:
-            return []
+        # Função de Fusão de Especialidades
+        def buscar_especialidades_t9():
+            try:
+                res = supabase.table("MEDICOS").select("especialidade").execute()
+                if res.data:
+                    bruto = [i['especialidade'] for i in res.data if i['especialidade']]
+                    return sorted(list(set(bruto)))
+                return []
+            except:
+                return []
 
-    c1, c2 = st.columns(2)
+        c1, c2 = st.columns(2)
 
-    with c1:
-        st.subheader("➕ Adicionar Categoria")
-        # Usamos labels e keys únicas (t9_) para NÃO conflitar com as Telas 1-8
-        n_esp = st.text_input("Nova Especialidade", key="t9_nome_esp").strip().title()
-        n_med = st.text_input("Médico Responsável", key="t9_nome_med")
-        n_uni = st.selectbox("Unidade", ["Eldorado", "Praça 7"], key="t9_unid")
+        with c1:
+            st.subheader("➕ Adicionar Categoria")
+            n_esp = st.text_input("Nome da Especialidade", key="t9_nome_esp").strip().title()
+            n_med = st.text_input("Médico Responsável", key="t9_nome_med")
+            
+            # 2. CAMPO UNIDADE (Puxando as 4 unidades conforme solicitado)
+            unidades_disponiveis = ["Eldorado", "Praça 7", "Venda Nova", "Barreiro"]
+            n_uni = st.selectbox("Escolha a Unidade", unidades_disponiveis, key="t9_unid")
 
-        if st.button("Ativar Categoria", key="t9_btn_salvar", use_container_width=True):
-            if n_esp and n_med:
-                supabase.table("MEDICOS").insert({"nome": n_med, "especialidade": n_esp, "unidade": n_uni}).execute()
-                st.success(f"'{n_esp}' cadastrada!")
-                st.rerun()
+            if st.button("Ativar Categoria", key="t9_btn_salvar", use_container_width=True):
+                if n_esp and n_med:
+                    try:
+                        payload = {"nome": n_med, "especialidade": n_esp, "unidade": n_uni}
+                        supabase.table("MEDICOS").insert(payload).execute()
+                        st.success(f"Especialidade '{n_esp}' ativada na unidade {n_uni}!")
+                        st.rerun()
+                    except Exception as e:
+                        st.error(f"Erro ao salvar: {e}")
+                else:
+                    st.warning("Preencha todos os campos.")
+
+        with c2:
+            st.subheader("📋 Especialidades Ativas")
+            lista = buscar_especialidades_t9()
+            if lista:
+                for item in lista:
+                    st.write(f"✅ {item}")
+                
+                st.markdown("---")
+                st.subheader("🗑️ Remover Categoria")
+                alvo = st.selectbox("Selecione para ocultar", lista, key="t9_sel_del")
+                
+                if st.button("Remover do Sistema", type="primary", key="t9_btn_del", use_container_width=True):
+                    supabase.table("MEDICOS").update({"especialidade": "Sem Especialidade"}).eq("especialidade", alvo).execute()
+                    st.warning(f"'{alvo}' removida com sucesso!")
+                    st.rerun()
             else:
-                st.error("Preencha os campos.")
+                st.info("Nenhuma categoria encontrada.")
 
-    with c2:
-        st.subheader("📋 Filtros Ativos")
-        lista = buscar_especialidades_t9()
-        if lista:
-            for item in lista:
-                st.write(f"✅ {item}")
-            
-            st.markdown("---")
-            st.subheader("🗑️ Remover")
-            alvo = st.selectbox("Remover do Filtro", lista, key="t9_sel_del")
-            
-            if st.button("Remover Categoria", type="primary", key="t9_btn_del", use_container_width=True):
-                supabase.table("MEDICOS").update({"especialidade": "Sem Especialidade"}).eq("especialidade", alvo).execute()
-                st.warning(f"'{alvo}' removida!")
-                st.rerun()
-        else:
-            st.info("Nenhuma especialidade encontrada.")
-
-    st.markdown("---")
-    st.caption("IA.na.Empresa - Gestão Dinâmica de Filtros")
+        st.markdown("---")
+        st.caption("IA.na.Empresa - Gestão de Unidades e Especialidades")
