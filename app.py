@@ -715,7 +715,7 @@ elif menu == "8. Relatório Gerencial":
 
 
 # ==========================================================
-# TELA 9: GESTÃO DINÂMICA (CONECTADA À TABELA UNIDADES)
+# TELA 9: GESTÃO DINÂMICA (UNIDADES REAIS DO BANCO)
 # ==========================================================
 
 navegador = locals().get('menu') or locals().get('menu_selecionado') or locals().get('escolha')
@@ -745,17 +745,16 @@ if navegador == "9. Gestão de Especialidades":
                 return []
             except: return []
 
-        # --- FUNÇÃO 2: BUSCAR UNIDADES (Tabela UNIDADES) ---
-        def buscar_unidades_banco():
+        # --- FUNÇÃO 2: BUSCAR UNIDADES REAIS (Tabela UNIDADES) ---
+        def buscar_unidades_reais():
             try:
-                # Busca os nomes na sua tabela "UNIDADES"
+                # Busca na sua tabela UNIDADES
                 res = supabase.table("UNIDADES").select("nome").execute()
                 if res.data:
-                    # Se a coluna no seu banco tiver outro nome (ex: 'unidade'), mude 'nome' abaixo
-                    bruto = [i['nome'] for i in res.data if i['nome']]
-                    return sorted(list(set(bruto)))
-                # Caso a tabela esteja vazia, usamos as padrões como backup
-                return ["Eldorado", "Praça 7", "Venda Nova", "Barreiro"]
+                    # Puxa os nomes completos (Eldorado Av Jose..., etc)
+                    lista = [i['nome'] for i in res.data if i['nome']]
+                    return sorted(list(set(lista)))
+                return ["Eldorado", "Praça 7", "Venda Nova", "Barreiro"] # Backup
             except:
                 return ["Eldorado", "Praça 7", "Venda Nova", "Barreiro"]
 
@@ -766,15 +765,19 @@ if navegador == "9. Gestão de Especialidades":
             n_esp = st.text_input("Nome da Especialidade", key="t9_f_esp").strip().title()
             n_med = st.text_input("Médico Responsável", key="t9_f_med")
             
-            # --- AGORA AS UNIDADES VÊM DIRETO DO BANCO ---
-            lista_unidades_db = buscar_unidades_banco()
-            n_uni = st.selectbox("Escolha a Unidade", lista_unidades_db, key="t9_f_unid")
+            # --- MENU DE UNIDADES DINÂMICO ---
+            unidades_banco = buscar_unidades_reais()
+            n_uni = st.selectbox("Escolha a Unidade Correta", unidades_banco, key="t9_f_unid")
 
             if st.button("Ativar Categoria", key="t9_f_btn", use_container_width=True):
                 if n_esp and n_med:
-                    supabase.table("MEDICOS").insert({"nome": n_med, "especialidade": n_esp, "unidade": n_uni}).execute()
-                    st.success(f"Especialidade '{n_esp}' ativada na unidade {n_uni}!")
-                    st.rerun()
+                    try:
+                        # Salva na tabela MEDICOS relacionando com a unidade escolhida
+                        supabase.table("MEDICOS").insert({"nome": n_med, "especialidade": n_esp, "unidade": n_uni}).execute()
+                        st.success(f"Especialidade '{n_esp}' cadastrada com sucesso!")
+                        st.rerun()
+                    except Exception as e:
+                        st.error(f"Erro ao salvar: {e}")
                 else:
                     st.warning("Preencha todos os campos.")
 
@@ -794,4 +797,4 @@ if navegador == "9. Gestão de Especialidades":
                 st.info("Nenhuma especialidade encontrada.")
 
         st.markdown("---")
-        st.caption("IA.na.Empresa - Conectado à Tabela UNIDADES")
+        st.caption("IA.na.Empresa - Gestão de Unidades e Especialidades")
