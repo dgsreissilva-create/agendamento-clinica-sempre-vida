@@ -714,40 +714,28 @@ elif menu == "8. Relatório Gerencial":
 
 
 
-
 # ==========================================================
-# TELA 9: GESTÃO DINÂMICA DE ESPECIALIDADES (PROTEÇÃO ESPELHADA)
+# TELA 9: GESTÃO DINÂMICA (CONECTADA À TABELA UNIDADES)
 # ==========================================================
 
-# Pegamos a variável de navegação (menu, escolha, etc)
 navegador = locals().get('menu') or locals().get('menu_selecionado') or locals().get('escolha')
 
 if navegador == "9. Gestão de Especialidades":
     
-    # --- PROCURA A VARIÁVEL DE LOGIN REAL NO SEU SISTEMA ---
-    # Este loop varre a memória e descobre qual chave está como 'True' (logado)
+    # --- BUSCA AUTOMÁTICA DA VARIÁVEL DE LOGIN ---
     logado_real = False
-    chaves_comuns = ['autenticado', 'logado', 'login', 'senha_correta', 'acesso_liberado']
-    
-    # Testa as chaves comuns
-    for chave in chaves_comuns:
-        if st.session_state.get(chave) == True:
+    for k, v in st.session_state.items():
+        if v == True and k not in ['menu', 'sidebar']:
             logado_real = True
             break
-            
-    # Se ainda não achou, faz uma busca agressiva por qualquer variável booleana True
-    if not logado_real:
-        for k, v in st.session_state.items():
-            if v == True and k not in ['menu', 'sidebar']: # Ignora variáveis de menu
-                logado_real = True
-                break
 
     if not logado_real:
         st.error("🔒 Acesso Restrito. Por favor, realize o login na Tela Inicial.")
     else:
-        st.title("🛡️ Gestão de Especialidades")
+        st.title("🛡️ Gestão de Especialidades e Unidades")
         st.markdown("---")
 
+        # --- FUNÇÃO 1: BUSCAR ESPECIALIDADES (Tabela MEDICOS) ---
         def buscar_especialidades_t9():
             try:
                 res = supabase.table("MEDICOS").select("especialidade").execute()
@@ -755,42 +743,55 @@ if navegador == "9. Gestão de Especialidades":
                     bruto = [i['especialidade'] for i in res.data if i['especialidade']]
                     return sorted(list(set(bruto)))
                 return []
+            except: return []
+
+        # --- FUNÇÃO 2: BUSCAR UNIDADES (Tabela UNIDADES) ---
+        def buscar_unidades_banco():
+            try:
+                # Busca os nomes na sua tabela "UNIDADES"
+                res = supabase.table("UNIDADES").select("nome").execute()
+                if res.data:
+                    # Se a coluna no seu banco tiver outro nome (ex: 'unidade'), mude 'nome' abaixo
+                    bruto = [i['nome'] for i in res.data if i['nome']]
+                    return sorted(list(set(bruto)))
+                # Caso a tabela esteja vazia, usamos as padrões como backup
+                return ["Eldorado", "Praça 7", "Venda Nova", "Barreiro"]
             except:
-                return []
+                return ["Eldorado", "Praça 7", "Venda Nova", "Barreiro"]
 
         c1, c2 = st.columns(2)
 
         with c1:
             st.subheader("➕ Adicionar Categoria")
-            n_esp = st.text_input("Nome da Especialidade", key="t9_final_esp").strip().title()
-            n_med = st.text_input("Médico Responsável", key="t9_final_med")
+            n_esp = st.text_input("Nome da Especialidade", key="t9_f_esp").strip().title()
+            n_med = st.text_input("Médico Responsável", key="t9_f_med")
             
-            # Unidades solicitadas
-            unidades_list = ["Eldorado", "Praça 7", "Venda Nova", "Barreiro"]
-            n_uni = st.selectbox("Escolha a Unidade", unidades_list, key="t9_final_unid")
+            # --- AGORA AS UNIDADES VÊM DIRETO DO BANCO ---
+            lista_unidades_db = buscar_unidades_banco()
+            n_uni = st.selectbox("Escolha a Unidade", lista_unidades_db, key="t9_f_unid")
 
-            if st.button("Ativar Categoria", key="t9_final_btn", use_container_width=True):
+            if st.button("Ativar Categoria", key="t9_f_btn", use_container_width=True):
                 if n_esp and n_med:
                     supabase.table("MEDICOS").insert({"nome": n_med, "especialidade": n_esp, "unidade": n_uni}).execute()
-                    st.success(f"Especialidade '{n_esp}' ativada!")
+                    st.success(f"Especialidade '{n_esp}' ativada na unidade {n_uni}!")
                     st.rerun()
                 else:
                     st.warning("Preencha todos os campos.")
 
         with c2:
             st.subheader("📋 Especialidades Ativas")
-            lista = buscar_especialidades_t9()
-            if lista:
-                for item in lista:
+            lista_esp = buscar_especialidades_t9()
+            if lista_esp:
+                for item in lista_esp:
                     st.write(f"✅ {item}")
                 st.markdown("---")
-                alvo = st.selectbox("Remover do Filtro", lista, key="t9_final_del")
-                if st.button("Remover Categoria", type="primary", key="t9_final_btn_del", use_container_width=True):
+                alvo = st.selectbox("Selecione para remover", lista_esp, key="t9_f_del")
+                if st.button("Remover do Sistema", type="primary", key="t9_f_btn_del", use_container_width=True):
                     supabase.table("MEDICOS").update({"especialidade": "Sem Especialidade"}).eq("especialidade", alvo).execute()
                     st.warning(f"'{alvo}' removida!")
                     st.rerun()
             else:
-                st.info("Nenhuma categoria encontrada.")
+                st.info("Nenhuma especialidade encontrada.")
 
         st.markdown("---")
-        st.caption("IA.na.Empresa - Gestão de Unidades e Especialidades")
+        st.caption("IA.na.Empresa - Conectado à Tabela UNIDADES")
