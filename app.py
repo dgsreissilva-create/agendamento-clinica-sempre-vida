@@ -715,24 +715,30 @@ elif menu == "8. Relatório Gerencial":
 
 
 
-
 # ==========================================================
-# TELA 9: GESTÃO DINÂMICA DE ESPECIALIDADES (FINALIZADA)
+# TELA 9: GESTÃO DINÂMICA DE ESPECIALIDADES (LOGIN BLINDADO)
 # ==========================================================
 
-# Identifica a navegação sem conflito
 navegador = locals().get('menu') or locals().get('menu_selecionado') or locals().get('escolha')
 
 if navegador == "9. Gestão de Especialidades":
-    # 1. PROTEÇÃO POR SENHA (Igual às outras telas)
-    if "autenticado" not in st.session_state or not st.session_state["autenticado"]:
+    # --- VERIFICAÇÃO DE LOGIN MULTI-CAMADA ---
+    # Procuramos por qualquer sinal de que você já passou pela senha inicial
+    is_logado = (
+        st.session_state.get("autenticado", False) or 
+        st.session_state.get("logado", False) or 
+        st.session_state.get("usuario_autenticado", False) or
+        st.session_state.get("acesso", False)
+    )
+
+    if not is_logado:
         st.error("🔒 Acesso Restrito. Por favor, realize o login na Tela Inicial.")
+        # Dica para o Douglas: Se você acabou de colar o código, 
+        # volte na Tela 1, digite a senha e clique em entrar novamente.
     else:
         st.title("🛡️ Gestão de Especialidades")
-        st.write("Gerencie as categorias e unidades que aparecem nos filtros do sistema.")
         st.markdown("---")
 
-        # Função de Fusão de Especialidades
         def buscar_especialidades_t9():
             try:
                 res = supabase.table("MEDICOS").select("especialidade").execute()
@@ -750,16 +756,14 @@ if navegador == "9. Gestão de Especialidades":
             n_esp = st.text_input("Nome da Especialidade", key="t9_nome_esp").strip().title()
             n_med = st.text_input("Médico Responsável", key="t9_nome_med")
             
-            # 2. CAMPO UNIDADE (Puxando as 4 unidades conforme solicitado)
             unidades_disponiveis = ["Eldorado", "Praça 7", "Venda Nova", "Barreiro"]
             n_uni = st.selectbox("Escolha a Unidade", unidades_disponiveis, key="t9_unid")
 
             if st.button("Ativar Categoria", key="t9_btn_salvar", use_container_width=True):
                 if n_esp and n_med:
                     try:
-                        payload = {"nome": n_med, "especialidade": n_esp, "unidade": n_uni}
-                        supabase.table("MEDICOS").insert(payload).execute()
-                        st.success(f"Especialidade '{n_esp}' ativada na unidade {n_uni}!")
+                        supabase.table("MEDICOS").insert({"nome": n_med, "especialidade": n_esp, "unidade": n_uni}).execute()
+                        st.success(f"Especialidade '{n_esp}' ativada!")
                         st.rerun()
                     except Exception as e:
                         st.error(f"Erro ao salvar: {e}")
@@ -772,14 +776,11 @@ if navegador == "9. Gestão de Especialidades":
             if lista:
                 for item in lista:
                     st.write(f"✅ {item}")
-                
                 st.markdown("---")
-                st.subheader("🗑️ Remover Categoria")
-                alvo = st.selectbox("Selecione para ocultar", lista, key="t9_sel_del")
-                
-                if st.button("Remover do Sistema", type="primary", key="t9_btn_del", use_container_width=True):
+                alvo = st.selectbox("Selecione para remover", lista, key="t9_sel_del")
+                if st.button("Remover Categoria", type="primary", key="t9_btn_del", use_container_width=True):
                     supabase.table("MEDICOS").update({"especialidade": "Sem Especialidade"}).eq("especialidade", alvo).execute()
-                    st.warning(f"'{alvo}' removida com sucesso!")
+                    st.warning(f"'{alvo}' removida!")
                     st.rerun()
             else:
                 st.info("Nenhuma categoria encontrada.")
