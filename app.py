@@ -79,7 +79,8 @@ if menu == "1. Cadastro de Médicos":
             u = st.selectbox("Unidade", [
                 "Pç 7 Rua Carijos 424 SL 2213", 
                 "Pç 7 Rua Rio de Janeiro 462 SL 303", 
-                "Eldorado Av Jose Faria da Rocha 4408 2 and"
+                "Eldorado Av Jose Faria da Rocha 4408 2 and",
+                "Eldorado Av Jose Faria da Rocha 5959"
             ])
             
             if st.form_submit_button("Salvar"):
@@ -754,9 +755,15 @@ if navegador == "9. Gestão de Especialidades":
                     # Puxa os nomes completos (Eldorado Av Jose..., etc)
                     lista = [i['nome'] for i in res.data if i['nome']]
                     return sorted(list(set(lista)))
-                return ["Eldorado", "Praça 7", "Venda Nova", "Barreiro"] # Backup
+                return ["Pç 7 Rua Carijos 424 SL 2213", 
+                "Pç 7 Rua Rio de Janeiro 462 SL 303", 
+                "Eldorado Av Jose Faria da Rocha 4408 2 and",
+                "Eldorado Av Jose Faria da Rocha 5959"] # Backup
             except:
-                return ["Eldorado", "Praça 7", "Venda Nova", "Barreiro"]
+                return ["Pç 7 Rua Carijos 424 SL 2213", 
+                "Pç 7 Rua Rio de Janeiro 462 SL 303", 
+                "Eldorado Av Jose Faria da Rocha 4408 2 and",
+                "Eldorado Av Jose Faria da Rocha 5959"]
 
         c1, c2 = st.columns(2)
 
