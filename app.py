@@ -711,36 +711,63 @@ elif menu == "8. Relatório Gerencial":
 
 
 
-streamlit.errors.StreamlitDuplicateElementId: This app has encountered an error. The original error message is redacted to prevent data leaks. Full error details have been recorded in the logs (if you're on Streamlit Cloud, click on 'Manage app' in the lower right of your app).
+# ==========================================================
+# TELA 9: GESTÃO DINÂMICA DE ESPECIALIDADES (MODO ISOLADO)
+# ==========================================================
 
-Traceback:
-File "/mount/src/agendamento-clinica-sempre-vida/app.py", line 745, in <module>
-    menu = st.sidebar.radio("Navegação", [
-        "1. Cadastro de Médicos",
-    ...<8 lines>...
-    
-    ], index=2)
-File "/home/adminuser/venv/lib/python3.13/site-packages/streamlit/runtime/metrics_util.py", line 532, in wrapped_func
-    result = non_optional_func(*args, **kwargs)
-File "/home/adminuser/venv/lib/python3.13/site-packages/streamlit/elements/widgets/radio.py", line 364, in radio
-    return self._radio(
-           ~~~~~~~~~~~^
-        label=label,
-        ^^^^^^^^^^^^
-    ...<13 lines>...
-        width=width,
-        ^^^^^^^^^^^^
-    )
-    ^
-File "/home/adminuser/venv/lib/python3.13/site-packages/streamlit/elements/widgets/radio.py", line 421, in _radio
-    element_id = compute_and_register_element_id(
-        "radio",
-    ...<9 lines>...
-        width=width,
-    )
-File "/home/adminuser/venv/lib/python3.13/site-packages/streamlit/elements/lib/utils.py", line 265, in compute_and_register_element_id
-    _register_element_id(ctx, element_type, element_id)
-    ~~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
-File "/home/adminuser/venv/lib/python3.13/site-packages/streamlit/elements/lib/utils.py", line 150, in _register_element_id
-    raise StreamlitDuplicateElementId(element_type)
+# Verificamos qual opção foi clicada no menu lateral sem dar erro de nome
+navegador = locals().get('menu') or locals().get('menu_selecionado') or locals().get('escolha')
 
+if navegador == "9. Gestão de Especialidades":
+    st.title("🛡️ Gestão de Especialidades")
+    st.markdown("---")
+
+    # Função interna (Fusão de especialidades)
+    def buscar_especialidades_t9():
+        try:
+            res = supabase.table("MEDICOS").select("especialidade").execute()
+            if res.data:
+                # set() faz a união dos nomes repetidos
+                bruto = [i['especialidade'] for i in res.data if i['especialidade']]
+                return sorted(list(set(bruto)))
+            return []
+        except:
+            return []
+
+    c1, c2 = st.columns(2)
+
+    with c1:
+        st.subheader("➕ Adicionar Categoria")
+        # Usamos labels e keys únicas (t9_) para NÃO conflitar com as Telas 1-8
+        n_esp = st.text_input("Nova Especialidade", key="t9_nome_esp").strip().title()
+        n_med = st.text_input("Médico Responsável", key="t9_nome_med")
+        n_uni = st.selectbox("Unidade", ["Eldorado", "Praça 7"], key="t9_unid")
+
+        if st.button("Ativar Categoria", key="t9_btn_salvar", use_container_width=True):
+            if n_esp and n_med:
+                supabase.table("MEDICOS").insert({"nome": n_med, "especialidade": n_esp, "unidade": n_uni}).execute()
+                st.success(f"'{n_esp}' cadastrada!")
+                st.rerun()
+            else:
+                st.error("Preencha os campos.")
+
+    with c2:
+        st.subheader("📋 Filtros Ativos")
+        lista = buscar_especialidades_t9()
+        if lista:
+            for item in lista:
+                st.write(f"✅ {item}")
+            
+            st.markdown("---")
+            st.subheader("🗑️ Remover")
+            alvo = st.selectbox("Remover do Filtro", lista, key="t9_sel_del")
+            
+            if st.button("Remover Categoria", type="primary", key="t9_btn_del", use_container_width=True):
+                supabase.table("MEDICOS").update({"especialidade": "Sem Especialidade"}).eq("especialidade", alvo).execute()
+                st.warning(f"'{alvo}' removida!")
+                st.rerun()
+        else:
+            st.info("Nenhuma especialidade encontrada.")
+
+    st.markdown("---")
+    st.caption("IA.na.Empresa - Gestão Dinâmica de Filtros")
