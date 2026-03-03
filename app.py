@@ -37,7 +37,9 @@ menu = st.sidebar.radio("Navegação", [
     "5. Cancelar Consulta",
     "6. Excluir Grade Aberta",
     "7. Excluir Cadastro de Médico",
-    "8. Relatório Gerencial"
+    "8. Relatório Gerencial",
+    "9. Gestão de Especialidades"
+    
 ], index=2)
 
 def verificar_senha():
@@ -705,3 +707,81 @@ elif menu == "8. Relatório Gerencial":
 
             c1.metric("Total Geral de Vagas (Sistema)", len(df))
             c2.metric("Total Geral Agendado", len(df[df['status'] == 'Marcada']))
+
+
+
+# ==========================================================
+# TELA 9: GESTÃO DINÂMICA DE ESPECIALIDADES
+# (Fundindo lógica de busca, cadastro e limpeza)
+# ==========================================================
+
+if menu_selecionado == "Gestão de Especialidades":
+    st.title("🛡️ Gestão de Especialidades (Tela 9)")
+    st.markdown("---")
+
+    # --- FUNÇÃO DE FUSÃO DINÂMICA (Lê a tabela MEDICOS e unifica especialidades) ---
+    def obter_especialidades_unificadas():
+        try:
+            # Busca a coluna especialidade de todos os registros na tabela MEDICOS
+            res = supabase.table("MEDICOS").select("especialidade").execute()
+            if res.data:
+                # Extrai os nomes, remove valores nulos/vazios
+                bruto = [item['especialidade'] for item in res.data if item['especialidade']]
+                # O 'set' faz a FUSÃO (remove duplicatas) e 'sorted' coloca em ordem A-Z
+                return sorted(list(set(bruto)))
+            return []
+        except Exception:
+            return []
+
+    # Layout Visual
+    col_nova, col_lista = st.columns(2)
+
+    with col_nova:
+        st.subheader("➕ Criar Nova Categoria")
+        st.info("Para criar uma categoria, cadastre um registro base.")
+        
+        nova_esp_nome = st.text_input("Nome da Especialidade").strip().title()
+        nome_medico_resp = st.text_input("Nome do Profissional Responsável")
+        unidade_link = st.selectbox("Unidade Base", ["Eldorado", "Praça 7"], key="unidade_t9")
+
+        if st.button("Confirmar Cadastro Dinâmico", use_container_width=True):
+            if nova_esp_nome and nome_medico_resp:
+                # Insere no banco: a partir daqui, o filtro dinâmico já a reconhecerá
+                payload = {
+                    "nome": nome_medico_resp,
+                    "especialidade": nova_esp_nome,
+                    "unidade": unidade_link
+                }
+                supabase.table("MEDICOS").insert(payload).execute()
+                st.success(f"Categoria '{nova_esp_nome}' ativada com sucesso!")
+                st.rerun()
+            else:
+                st.error("Preencha todos os campos para cadastrar.")
+
+    with col_list:
+        st.subheader("📋 Categorias Ativas (Filtro Atual)")
+        # Aqui acontece a mágica da fusão apresentada no algoritmo anterior
+        especialidades_vivas = obter_especialidades_unificadas()
+
+        if especialidades_vivas:
+            # Mostra o que o sistema "enxerga" no momento
+            for e in especialidades_vivas:
+                st.write(f"🔹 {e}")
+            
+            st.markdown("---")
+            st.subheader("🗑️ Desativar Categoria")
+            alvo_remover = st.selectbox("Selecione para remover do filtro", especialidades_vivas)
+            
+            if st.button("Remover desta Categoria", type="primary", use_container_width=True):
+                # Regra de Segurança: Altera a especialidade para 'Sem Especialidade'
+                # Isso limpa o filtro sem apagar os dados do médico
+                supabase.table("MEDICOS").update({"especialidade": "Sem Especialidade"}).eq("especialidade", alvo_remover).execute()
+                st.warning(f"A categoria '{alvo_remover}' foi ocultada dos filtros.")
+                st.rerun()
+        else:
+            st.warning("O banco de dados de médicos está vazio ou sem especialidades.")
+
+    st.markdown("---")
+    st.caption("IA.na.Empresa - Módulo de Inteligência de Dados v2.1")
+
+
