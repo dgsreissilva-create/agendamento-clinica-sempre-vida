@@ -96,63 +96,62 @@ if menu == "1. Cadastro de Médicos":
 
 
 
-# TELA 2 - ABERTURA (AJUSTE FINO: ORDEM ALFABÉTICA)
+
+# TELA 2 - ABERTURA (CORRIGIDA)
 elif menu == "2. Abertura de Agenda":
     if verificar_senha():
+        # A partir daqui, TUDO tem que ter 4 espaços (um 'Tab') de recuo para a direita
         st.header("🏪 Abertura de Agenda")
         medicos = buscar_todos("MEDICOS")
+        
         if medicos:
             df_meds = pd.DataFrame(medicos)
-            
-            # 1. Seleciona a Unidade
             u_filtro = st.selectbox("Selecione a Unidade para filtrar médicos:", sorted(df_meds['unidade'].unique().tolist()))
-            
-            # 2. Filtra e Ordena os médicos por nome (A-Z)
             df_filtrado = df_meds[df_meds['unidade'] == u_filtro].sort_values(by='nome')
-            
-            # 3. Monta as opções já ordenadas
             op = {f"{m['nome']} ({m['especialidade']})": m['id'] for _, m in df_filtrado.iterrows()}
             
-            sel = st.selectbox("Médico Disponível nesta Unidade (Ordem Alfabética)", list(op.keys()))
-            
-            c1, c2, c3 = st.columns(3)
-            d = c1.date_input("Data da Agenda", format="DD/MM/YYYY")
-            hi = c2.time_input("Hora Início", value=dt_lib.time(8, 0))
-            hf = c3.time_input("Hora Final", value=dt_lib.time(18, 0))
-            inter = st.number_input("Intervalo (minutos)", 5, 120, 20)
-            
-
-if st.button("Gerar Grade"):
-                # 1. DEFINIÇÃO DO PERÍODO
-                t, fim = dt_lib.datetime.combine(d, hi), dt_lib.datetime.combine(d, hf)
+            if not df_filtrado.empty:
+                sel = st.selectbox("Médico Disponível nesta Unidade (Ordem Alfabética)", list(op.keys()))
+                c1, c2, c3 = st.columns(3)
+                d = c1.date_input("Data da Agenda", format="DD/MM/YYYY")
+                hi = c2.time_input("Hora Início", value=dt_lib.time(8, 0))
+                hf = c3.time_input("Hora Final", value=dt_lib.time(18, 0))
+                inter = st.number_input("Intervalo (minutos)", 5, 120, 20)
                 
-                # 2. TRAVA ANTI-DUPLICIDADE: Busca se já existem consultas para esse médico e data
-                # Isso evita que o clique duplo gere 40 horários repetidos
-                check = supabase.table("CONSULTAS").select("id") \
-                    .eq("medico_id", op[sel]) \
-                    .gte("data_hora", t.isoformat()) \
-                    .lte("data_hora", fim.isoformat()) \
-                    .execute()
-
-                if check.data:
-                    st.warning(f"⚠️ Atenção: Já existe uma grade aberta para este médico neste período!")
-                else:
-                    vagas = []
-                    while t < fim:
-                        vagas.append({
-                            "medico_id": op[sel], 
-                            "data_hora": t.isoformat(), 
-                            "status": "Livre"
-                        })
-                        t += dt_lib.timedelta(minutes=inter)
+                # ESTE BOTÃO SÓ APARECE SE A SENHA FOR LIBERADA ACIMA
+                if st.button("Gerar Grade"):
+                    # 1. DEFINIÇÃO DO PERÍODO
+                    t, fim = dt_lib.datetime.combine(d, hi), dt_lib.datetime.combine(d, hf)
                     
-                    if vagas:
-                        try:
-                            supabase.table("CONSULTAS").insert(vagas).execute()
-                            st.success(f"✅ Grade com {len(vagas)} horários criada com sucesso!")
-                            st.rerun()
-                        except Exception as e:
-                            st.error(f"Erro ao salvar no banco: {e}")
+                    # 2. TRAVA ANTI-DUPLICIDADE
+                    check = supabase.table("CONSULTAS").select("id") \
+                        .eq("medico_id", op[sel]) \
+                        .gte("data_hora", t.isoformat()) \
+                        .lte("data_hora", fim.isoformat()) \
+                        .execute()
+
+                    if check.data:
+                        st.warning(f"⚠️ Atenção: Já existe uma grade aberta para este médico neste período!")
+                    else:
+                        vagas = []
+                        while t < fim:
+                            vagas.append({
+                                "medico_id": op[sel], 
+                                "data_hora": t.isoformat(), 
+                                "status": "Livre"
+                            })
+                            t += dt_lib.timedelta(minutes=inter)
+                        
+                        if vagas:
+                            try:
+                                supabase.table("CONSULTAS").insert(vagas).execute()
+                                st.success(f"✅ Grade com {len(vagas)} horários criada com sucesso!")
+                                st.rerun()
+                            except Exception as e:
+                                st.error(f"Erro ao salvar no banco: {e}")
+            else:
+                st.info("Nenhum médico cadastrado nesta unidade.")
+                
 
 
 
