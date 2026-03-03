@@ -711,33 +711,39 @@ elif menu == "8. Relatório Gerencial":
 
 
 
-
 # ==========================================================
-# TELA 9: GESTÃO DINÂMICA DE ESPECIALIDADES (FINAL)
-# Copie este bloco exatamente onde termina a sua Tela 8
+# TELA 9: GESTÃO DINÂMICA DE ESPECIALIDADES (FINAL CORRIGIDA)
 # ==========================================================
 
-# IMPORTANTE: Verifique se o seu sistema usa 'escolha' ou 'menu_selecionado'
-# Se o erro de antes era NameError, use o nome que está no seu st.sidebar.selectbox
-opcoes_menu = ["Tela 1", "Tela 2", "Tela 3", "Tela 4", "Tela 5", "Tela 6", "Tela 7", "Tela 8", "Gestão de Especialidades"]
+# --- TÉCNICA DE AUTODETECÇÃO DE VARIÁVEL DE MENU ---
+# Procuramos qual variável o seu sistema usa (menu_selecionado, escolha ou opcao)
+navegacao_atual = None
+for nome_var in ['menu_selecionado', 'escolha', 'opcao', 'menu']:
+    if nome_var in locals():
+        navegacao_atual = locals()[nome_var]
+        break
 
-if menu_selecionado == "Gestão de Especialidades":
-    # Verificação de Senha (Garante que não fique em branco)
-    if "autenticado" not in st.session_state or not st.session_state["autenticado"]:
-        st.warning("🔒 Por favor, faça login na Tela Inicial para acessar esta área.")
+# Se ele encontrar a opção "Gestão de Especialidades" em qualquer uma delas, ele abre a tela
+if navegacao_atual == "Gestão de Especialidades":
+    st.title("🛡️ Gestão de Especialidades")
+    
+    # 1. VERIFICAÇÃO DE SEGURANÇA (SENHA)
+    # Se o seu sistema usa 'autenticado' ou 'logado' no session_state
+    is_logado = st.session_state.get("autenticado", False) or st.session_state.get("logado", False)
+    
+    if not is_logado:
+        st.warning("🔒 Acesso restrito. Por favor, faça login na Tela Inicial.")
     else:
-        st.title("🛡️ Gestão de Especialidades")
-        st.write("Esta tela gerencia as categorias que aparecem nos filtros de agendamento.")
         st.markdown("---")
-
-        # --- FUNÇÃO DE FUSÃO DINÂMICA INTERNA ---
-        def carregar_especialidades_vivas():
+        
+        # --- FUNÇÃO DE FUSÃO (Lê médicos e unifica especialidades) ---
+        def get_especialidades_t9():
             try:
                 res = supabase.table("MEDICOS").select("especialidade").execute()
                 if res.data:
-                    # Extrai, limpa repetidos e ordena
-                    bruto = [item['especialidade'] for item in res.data if item['especialidade']]
-                    return sorted(list(set(bruto)))
+                    # Pega a coluna, remove vazios, unifica (set) e ordena
+                    lista = [item['especialidade'] for item in res.data if item['especialidade']]
+                    return sorted(list(set(lista)))
                 return []
             except:
                 return []
@@ -745,37 +751,37 @@ if menu_selecionado == "Gestão de Especialidades":
         col_add, col_list = st.columns(2)
 
         with col_add:
-            st.subheader("➕ Adicionar Nova")
-            nova_esp = st.text_input("Nome da Nova Especialidade", key="input_t9_1").strip().title()
-            medico_base = st.text_input("Nome do Médico para esta categoria", key="input_t9_2")
-            unid = st.selectbox("Unidade", ["Eldorado", "Praça 7"], key="select_t9_3")
+            st.subheader("➕ Adicionar Categoria")
+            nova_esp = st.text_input("Nova Especialidade", key="input_t9_1").strip().title()
+            medico_base = st.text_input("Nome do Médico Responsável", key="input_t9_2")
+            unid_base = st.selectbox("Unidade", ["Eldorado", "Praça 7"], key="select_t9_3")
 
-            if st.button("Ativar Categoria", use_container_width=True):
+            if st.button("Ativar Nova Categoria", use_container_width=True):
                 if nova_esp and medico_base:
-                    payload = {"nome": medico_base, "especialidade": nova_esp, "unidade": unid}
+                    payload = {"nome": medico_base, "especialidade": nova_esp, "unidade": unid_base}
                     supabase.table("MEDICOS").insert(payload).execute()
-                    st.success(f"'{nova_esp}' cadastrada!")
+                    st.success(f"'{nova_esp}' agora está ativa!")
                     st.rerun()
                 else:
-                    st.error("Preencha os campos vazios.")
+                    st.error("Preencha o nome da especialidade e do médico.")
 
         with col_list:
-            st.subheader("📋 Especialidades Ativas")
-            lista_viva = carregar_especialidades_vivas()
+            st.subheader("📋 Categorias Ativas")
+            lista_atuais = get_especialidades_t9()
 
-            if lista_viva:
-                for item in lista_viva:
+            if lista_atuais:
+                for item in lista_atuais:
                     st.write(f"✅ {item}")
                 
                 st.markdown("---")
-                esp_para_limpar = st.selectbox("Selecione para remover", lista_viva, key="select_t9_4")
-                if st.button("Remover do Sistema", type="primary", use_container_width=True):
-                    # Transforma a especialidade em 'Sem Especialidade' para sumir do filtro
-                    supabase.table("MEDICOS").update({"especialidade": "Sem Especialidade"}).eq("especialidade", esp_para_limpar).execute()
-                    st.warning(f"'{esp_para_limpar}' removida com sucesso!")
+                esp_del = st.selectbox("Selecione para remover", lista_atuais, key="select_t9_4")
+                if st.button("Remover do Filtro", type="primary", use_container_width=True):
+                    # Transforma em 'Sem Especialidade' para sumir do menu dinâmico
+                    supabase.table("MEDICOS").update({"especialidade": "Sem Especialidade"}).eq("especialidade", esp_del).execute()
+                    st.warning(f"'{esp_del}' ocultada com sucesso!")
                     st.rerun()
             else:
-                st.info("Nenhuma especialidade encontrada no banco.")
+                st.info("Nenhuma especialidade no banco.")
 
-        st.markdown("---")
-        st.caption("IA.na.Empresa - Controle de Gestão")
+    st.markdown("---")
+    st.caption("IA.na.Empresa - Gestão de Dados")
