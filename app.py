@@ -179,15 +179,17 @@ elif menu == "3. Marcar Consulta":
             m_sel = st.selectbox("3. Escolha o Médico", sorted(df_esp['nome'].unique()))
             medico_id = df_esp[df_esp['nome'] == m_sel].iloc[0]['id']
 
-            # 2️⃣ Busca Horários Livres (Limite 10k para evitar cortes)
+          # 2️⃣ Busca Horários Livres FUTUROS
+            agora_iso = dt_lib.datetime.now().isoformat() # Captura data e hora atual
+            
             consultas_res = supabase.table("CONSULTAS") \
                 .select("*") \
                 .eq("medico_id", medico_id) \
                 .eq("status", "Livre") \
+                .gte("data_hora", agora_iso) \
                 .order("data_hora") \
                 .limit(10000) \
                 .execute()
-
             consultas = consultas_res.data
 
             if consultas:
