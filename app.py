@@ -119,39 +119,49 @@ elif menu == "2. Abertura de Agenda":
                 inter = st.number_input("Intervalo (minutos)", 5, 120, 20)
                 
                 # ESTE BOTÃO SÓ APARECE SE A SENHA FOR LIBERADA ACIMA
-                if st.button("Gerar Grade"):
+               if st.button("Gerar Grade"):
                     # 1. DEFINIÇÃO DO PERÍODO
-                    t, fim = dt_lib.datetime.combine(d, hi), dt_lib.datetime.combine(d, hf)
+                    t_inicio_orig = dt_lib.datetime.combine(d, hi)
+                    t_fim_orig = dt_lib.datetime.combine(d, hf)
                     
                     # 2. TRAVA ANTI-DUPLICIDADE
                     check = supabase.table("CONSULTAS").select("id") \
                         .eq("medico_id", op[sel]) \
-                        .gte("data_hora", t.isoformat()) \
-                        .lte("data_hora", fim.isoformat()) \
+                        .gte("data_hora", t_inicio_orig.isoformat()) \
+                        .lte("data_hora", t_fim_orig.isoformat()) \
                         .execute()
 
                     if check.data:
                         st.warning(f"⚠️ Atenção: Já existe uma grade aberta para este médico neste período!")
                     else:
                         vagas = []
-                        while t < fim:
+                        t_loop = t_inicio_orig
+                        while t_loop < t_fim_orig:
                             vagas.append({
                                 "medico_id": op[sel], 
-                                "data_hora": t.isoformat(), 
+                                "data_hora": t_loop.isoformat(), 
                                 "status": "Livre"
                             })
-                            t += dt_lib.timedelta(minutes=inter)
+                            t_loop += dt_lib.timedelta(minutes=inter)
                         
                         if vagas:
                             try:
                                 supabase.table("CONSULTAS").insert(vagas).execute()
-                                st.success(f"✅ Grade com {len(vagas)} horários criada com sucesso!")
-                                st.rerun()
+                                
+                                # --- NOVO AVISO DETALHADO (SOLICITADO) ---
+                                st.success(f"""
+                                ### ✅ Agenda Aberta com Sucesso!
+                                
+                                **📍 Unidade:** {u_filtro}  
+                                **👨‍⚕️ Médico:** {sel}  
+                                **📅 Data:** {d.strftime('%d/%m/%Y')}  
+                                **⏰ Horário:** {hi.strftime('%H:%M')} até {hf.strftime('%H:%M')}
+                                """)
+                                
+                                # Opcional: st.balloons() # Para comemorar a grade gerada!
+                                
                             except Exception as e:
-                                st.error(f"Erro ao salvar no banco: {e}")
-            else:
-                st.info("Nenhum médico cadastrado nesta unidade.")
-                
+                                st.error(f"Erro ao salvar no banco: {e}") 
 
 
 
