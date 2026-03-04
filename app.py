@@ -154,7 +154,7 @@ elif menu == "2. Abertura de Agenda":
                                 **📅 Data:** {d.strftime('%d/%m/%Y')}  
                                 **⏰ Horário:** {hi.strftime('%H:%M')} até {hf.strftime('%H:%M')}
                                 """)
-                                st.balloons()
+                               
                                 
                             except Exception as e:
                                 st.error(f"Erro ao salvar no banco: {e}")
