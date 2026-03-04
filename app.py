@@ -97,10 +97,9 @@ if menu == "1. Cadastro de Médicos":
 
 
 
-# TELA 2 - ABERTURA (CORRIGIDA)
+# TELA 2 - ABERTURA (CORRIGIDA E ALINHADA)
 elif menu == "2. Abertura de Agenda":
     if verificar_senha():
-        # A partir daqui, TUDO tem que ter 4 espaços (um 'Tab') de recuo para a direita
         st.header("🏪 Abertura de Agenda")
         medicos = buscar_todos("MEDICOS")
         
@@ -118,9 +117,8 @@ elif menu == "2. Abertura de Agenda":
                 hf = c3.time_input("Hora Final", value=dt_lib.time(18, 0))
                 inter = st.number_input("Intervalo (minutos)", 5, 120, 20)
                 
-                # ESTE BOTÃO SÓ APARECE SE A SENHA FOR LIBERADA ACIMA
-               if st.button("Gerar Grade"):
-                    # 1. DEFINIÇÃO DO PERÍODO
+                # O BOTÃO ABAIXO FOI ALINHADO PARA CORRIGIR O INDENTATION ERROR
+                if st.button("Gerar Grade"):
                     t_inicio_orig = dt_lib.datetime.combine(d, hi)
                     t_fim_orig = dt_lib.datetime.combine(d, hf)
                     
@@ -148,7 +146,6 @@ elif menu == "2. Abertura de Agenda":
                             try:
                                 supabase.table("CONSULTAS").insert(vagas).execute()
                                 
-                                # --- NOVO AVISO DETALHADO (SOLICITADO) ---
                                 st.success(f"""
                                 ### ✅ Agenda Aberta com Sucesso!
                                 
@@ -157,12 +154,12 @@ elif menu == "2. Abertura de Agenda":
                                 **📅 Data:** {d.strftime('%d/%m/%Y')}  
                                 **⏰ Horário:** {hi.strftime('%H:%M')} até {hf.strftime('%H:%M')}
                                 """)
-                                
-                                # Opcional: st.balloons() # Para comemorar a grade gerada!
+                                st.balloons()
                                 
                             except Exception as e:
-                                st.error(f"Erro ao salvar no banco: {e}") 
-
+                                st.error(f"Erro ao salvar no banco: {e}")
+            else:
+                st.info("Nenhum médico cadastrado nesta unidade.")
 
 
 # TELA 3 - MARCAR CONSULTA (VERSÃO CORRIGIDA COM MENSAGEM DE SUCESSO EXTERNA)
