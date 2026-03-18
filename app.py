@@ -164,7 +164,7 @@ elif menu == "2. Abertura de Agenda":
 
 # TELA 3 - MARCAR CONSULTA (VERSÃO CORRIGIDA COM MENSAGEM DE SUCESSO EXTERNA)
 elif menu == "3. Marcar Consulta":
-    st.header("📅 Agendamento de Consultas")
+    st.header("📅 Agendamento de Consultas - CLICK SETA ABAIXO")
 
     # Inicializa variáveis de estado para o controle do sucesso
     if "agendamento_ok" not in st.session_state:
