@@ -39,7 +39,6 @@ menu = st.sidebar.radio("Navegação", [
     "7. Excluir Cadastro de Médico",
     "8. Relatório Gerencial",
     "9. Gestão de Especialidades"
-   
     
 ], index=2)
 
@@ -837,44 +836,3 @@ if navegador == "9. Gestão de Especialidades":
 
         st.markdown("---")
         st.caption("IA.na.Empresa - Gestão de Unidades e Especialidades")
-
-
-
-
--- 1. Remove a tabela antiga para evitar conflitos de nomes de colunas
-DROP TABLE IF EXISTS PACIENTES;
-
--- 2. Cria a tabela com a estrutura exata esperada pela Tela 10
-CREATE TABLE PACIENTES (
-  cpf text PRIMARY KEY,
-  nome text NOT NULL,
-  data_nascimento date,
-  telefone text,
-  convenio text,
-  email text,
-  cep text,
-  rua text,
-  numero text,
-  complemento text,
-  bairro text,
-  cidade text,
-  uf text,
-  atualizado_em timestamp with time zone DEFAULT now()
-);
-
--- 3. Garante que a tabela de atendimentos também esteja correta
-CREATE TABLE IF NOT EXISTS ATENDIMENTOS (
-  id uuid DEFAULT uuid_generate_v4() PRIMARY KEY,
-  data_hora timestamp with time zone DEFAULT now(),
-  paciente text,
-  cpf text,
-  unidade text,
-  medico text,
-  triagem text,
-  prontuario_texto text,
-  status text DEFAULT 'Aguardando'
-);
-
-
-
-
