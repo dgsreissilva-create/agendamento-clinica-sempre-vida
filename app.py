@@ -880,9 +880,9 @@ CREATE TABLE IF NOT EXISTS ATENDIMENTOS (
 
 
 # ==========================================================
-# TELA 10: RECEPÇÃO E CHECK-IN (PYTHON APENAS)
+# TELA 10: RECEPÇÃO E CHECK-IN (SOMENTE PYTHON)
 # ==========================================================
-if menu == "10. Recepção e Triagem":
+elif menu == "10. Recepção e Triagem":
     if verificar_senha():
         st.title("🛎️ Recepção e Check-in")
         
