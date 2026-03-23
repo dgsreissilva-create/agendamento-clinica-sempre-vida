@@ -878,6 +878,84 @@ CREATE TABLE IF NOT EXISTS ATENDIMENTOS (
 
 
 
+# ==========================================================
+# TELA 10: RECEPÇÃO E CHECK-IN (PYTHON APENAS)
+# ==========================================================
+if menu == "10. Recepção e Triagem":
+    if verificar_senha():
+        st.title("🛎️ Recepção e Check-in")
+        
+        u_lista = ["Pç 7 Rua Carijos 424 SL 2213", "Pç 7 Rua Rio de Janeiro 462 SL 303", 
+                   "Eldorado Av Jose Faria da Rocha 4408 2 and", "Eldorado Av Jose Faria da Rocha 5959"]
+        u_trab = st.selectbox("📍 Unidade:", u_lista)
+
+        hoje = dt_lib.datetime.now().date().isoformat()
+        res_ag = supabase.table("CONSULTAS").select("*, MEDICOS(nome, unidade)").eq("status", "Marcada").gte("data_hora", hoje).execute()
+        
+        lista_ag = []
+        df_un = pd.DataFrame()
+        if res_ag.data:
+            df_all = pd.DataFrame(res_ag.data)
+            df_un = df_all[df_all['MEDICOS'].apply(lambda x: x['unidade'] == u_trab)].copy()
+            if not df_un.empty:
+                df_un['display'] = df_un['paciente_nome'].str.upper() + " " + df_un['paciente_sobrenome'].str.upper()
+                lista_ag = df_un.sort_values('display')['display'].tolist()
+
+        c_b1, c_b2 = st.columns(2)
+        p_age = c_b1.selectbox("👥 Pacientes Hoje:", ["-- Selecione --"] + lista_ag)
+        cpf_b = c_b2.text_input("🔍 CPF (Busca):")
+
+        d_c = {}
+        if cpf_b:
+            try:
+                res_p = supabase.table("PACIENTES").select("*").eq("cpf", cpf_b).execute()
+                if res_p.data: 
+                    d_c = res_p.data[0]
+                    st.success("✅ Cadastro localizado!")
+            except: pass
+
+        with st.form("f_checkin_v2", clear_on_submit=False):
+            st.subheader("📝 Ficha e Endereço")
+            col1, col2, col3 = st.columns([3, 2, 2])
+            f_n = col1.text_input("Nome", value=d_c.get('nome', p_age if p_age != "-- Selecione --" else ""))
+            f_c = col2.text_input("CPF", value=cpf_b if cpf_b else d_c.get('cpf', ""))
+            v_n = pd.to_datetime(d_c.get('data_nascimento')).date() if d_c.get('data_nascimento') else dt_lib.date(1990, 1, 1)
+            f_nas = col3.date_input("Nascimento", value=v_n, min_value=dt_lib.date(1900,1,1), max_value=dt_lib.date.today(), format="DD/MM/YYYY")
+
+            col4, col5, col6 = st.columns(3)
+            f_t, f_cv, f_em = col4.text_input("WhatsApp", d_c.get('telefone', "")), col5.text_input("Convênio", d_c.get('convenio', "PARTICULAR")), col6.text_input("E-mail", d_c.get('email', ""))
+
+            ce1, ce2, ce3, ce4 = st.columns([2, 4, 1, 2])
+            f_cep, f_rua = ce1.text_input("CEP", d_c.get('cep', "")), ce2.text_input("Rua", d_c.get('rua', ""))
+            f_num, f_ba = ce3.text_input("Nº", d_c.get('numero', "")), ce4.text_input("Bairro", d_c.get('bairro', ""))
+            
+            ce5, ce6 = st.columns([3, 1])
+            f_cid, f_uf = ce5.text_input("Cidade", d_c.get('cidade', "Belo Horizonte")), ce6.text_input("UF", d_c.get('uf', "MG"), max_chars=2)
+
+            if st.form_submit_button("🚀 FINALIZAR CHECK-IN", use_container_width=True):
+                if f_c and f_n:
+                    try:
+                        ficha = {"cpf": f_c, "nome": f_n.upper(), "data_nascimento": f_nas.isoformat(), "telefone": f_t, "convenio": f_cv.upper(), "email": f_em.lower(), "cep": f_cep, "rua": f_rua, "numero": f_num, "bairro": f_ba, "cidade": f_cid, "uf": f_uf.upper()}
+                        supabase.table("PACIENTES").upsert(ficha).execute()
+                        
+                        m_n = "A DEFINIR"
+                        if p_age != "-- Selecione --": m_n = df_un[df_un['display'] == p_age].iloc[0]['MEDICOS']['nome']
+                        
+                        atend = {"paciente": f_n.upper(), "cpf": f_c, "unidade": u_trab, "medico": m_n, "triagem": f"NASC: {f_nas.strftime('%d/%m/%Y')} | TEL: {f_t} | CONV: {f_cv}", "status": "Aguardando"}
+                        supabase.table("ATENDIMENTOS").insert(atend).execute()
+                        
+                        if p_age != "-- Selecione --":
+                            id_ag = df_un[df_un['display'] == p_age].iloc[0]['id']
+                            supabase.table("CONSULTAS").update({"status": "Em Atendimento"}).eq("id", id_ag).execute()
+                        
+                        st.success("✅ Paciente enviado para a fila!")
+                        st.rerun()
+                    except Exception as e:
+                        st.error(f"Erro ao salvar: {e}")
+
+
+
+
 
 # ==========================================================
 # TELA 11: PRONTUÁRIO MÉDICO (ATENDIMENTO)
