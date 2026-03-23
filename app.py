@@ -843,97 +843,103 @@ if navegador == "9. Gestão de Especialidades":
 
 
 
+
+
+
 # ==========================================================
-# TELA 10: RECEPÇÃO (CHECK-IN INTEGRADO - VERSÃO FINAL)
+# TELA 10: RECEPÇÃO (CADASTRO ÚNICO E BUSCA POR CPF)
 # ==========================================================
 if menu == "10. Recepção e Triagem":
     if verificar_senha():
-        st.title("🛎️ Recepção - Check-in de Pacientes")
-        st.caption("Confirme os dados do agendamento e complete as informações de endereço.")
+        st.title("🛎️ Recepção - Check-in e Cadastro Único")
         st.markdown("---")
 
-        # 1. BUSCA PACIENTES AGENDADOS PARA HOJE
-        hoje_inicio = dt_lib.datetime.now().replace(hour=0, minute=0, second=0, microsecond=0).isoformat()
-        hoje_fim = dt_lib.datetime.now().replace(hour=23, minute=59, second=59, microsecond=999).isoformat()
+        # 1. BUSCA AGENDA DO DIA (Para facilitar a seleção)
+        hoje = dt_lib.datetime.now().date().isoformat()
+        res_agenda = supabase.table("CONSULTAS").select("*, MEDICOS(nome)").eq("status", "Marcada").gte("data_hora", hoje).execute()
+        
+        lista_pacientes_hoje = []
+        if res_agenda.data:
+            df_ag = pd.DataFrame(res_agenda.data)
+            df_ag['display'] = df_ag['paciente_nome'].str.upper() + " " + df_ag['paciente_sobrenome'].str.upper()
+            lista_pacientes_hoje = df_ag.sort_values('display')['display'].tolist()
 
-        res_agenda = supabase.table("CONSULTAS") \
-            .select("*, MEDICOS(nome)") \
-            .eq("status", "Marcada") \
-            .gte("data_hora", hoje_inicio) \
-            .lte("data_hora", hoje_fim) \
-            .execute()
+        # 2. ÁREA DE BUSCA RÁPIDA
+        col_busca1, col_busca2 = st.columns(2)
+        with col_busca1:
+            paciente_agendado = st.selectbox("📅 Selecionar da Agenda de Hoje", ["-- Selecione --"] + lista_pacientes_hoje)
+        with col_busca2:
+            cpf_busca = st.text_input("🔍 Ou busque por CPF para carregar dados:")
 
-        if not res_agenda.data:
-            st.info("📅 Não há pacientes agendados para hoje no sistema.")
-        else:
-            df_agenda = pd.DataFrame(res_agenda.data)
-            df_agenda['display'] = df_agenda['paciente_nome'].str.upper() + " " + df_agenda['paciente_sobrenome'].str.upper()
-            df_agenda = df_agenda.sort_values(by='display')
+        # Lógica de Carregamento Automático
+        dados_carregados = {}
+        if cpf_busca:
+            res_p = supabase.table("PACIENTES").select("*").eq("cpf", cpf_busca).execute()
+            if res_p.data:
+                dados_carregados = res_p.data[0]
+                st.success("✅ Cadastro localizado! Campos preenchidos.")
 
-            paciente_sel = st.selectbox("🔍 Selecione o Paciente na Agenda:", df_agenda['display'].tolist())
-            dados_originais = df_agenda[df_agenda['display'] == paciente_sel].iloc[0]
+        st.markdown("---")
+        
+        # 3. FORMULÁRIO DE CADASTRO/CHECK-IN
+        with st.form("form_paciente_full", clear_on_submit=False):
+            st.subheader("📝 Ficha Cadastral do Paciente")
+            
+            c1, c2, c3 = st.columns([3, 2, 2])
+            f_nome = c1.text_input("Nome Completo", value=dados_carregados.get('nome', paciente_agendado if paciente_agendado != "-- Selecione --" else ""))
+            f_cpf = c2.text_input("CPF (ID Único)", value=cpf_busca if cpf_busca else dados_carregados.get('cpf', ""))
+            f_nasc = c3.date_input("Data de Nascimento", value=pd.to_datetime(dados_carregados.get('data_nascimento')).date() if dados_carregados.get('data_nascimento') else dt_lib.date(1990, 1, 1))
+
+            c4, c5, c6 = st.columns(3)
+            f_tel = c4.text_input("Telefone/WhatsApp", value=dados_carregados.get('telefone', ""))
+            f_conv = c5.text_input("Convênio", value=dados_carregados.get('convenio', "PARTICULAR"))
+            f_email = c6.text_input("E-mail", value=dados_carregados.get('email', ""))
+
+            st.subheader("📍 Endereço Atualizado")
+            ce1, ce2, ce3 = st.columns([2, 4, 1])
+            f_cep = ce1.text_input("CEP", value=dados_carregados.get('cep', ""))
+            f_rua = ce2.text_input("Rua/Avenida", value=dados_carregados.get('rua', ""))
+            f_num = ce3.text_input("Nº", value=dados_carregados.get('numero', ""))
+
+            ce4, ce5, ce6 = st.columns([2, 2, 1])
+            f_comp = ce4.text_input("Complemento", value=dados_carregados.get('complemento', ""))
+            f_bairro = ce5.text_input("Bairro", value=dados_carregados.get('bairro', ""))
+            f_uf = ce6.text_input("UF", value=dados_carregados.get('uf', "MG"), max_chars=2)
+            f_cid = st.text_input("Cidade", value=dados_carregados.get('cidade', "Belo Horizonte"))
 
             st.markdown("---")
-            with st.form("form_checkin_final", clear_on_submit=True):
-                st.subheader("📝 Dados de Identificação")
-                
-                c1, c2 = st.columns(2)
-                with c1:
-                    # NOME AGORA EDITÁVEL (Sem o sombreado de bloqueio)
-                    f_nome = st.text_input("Nome do Paciente", value=paciente_sel)
-                    f_cpf = st.text_input("CPF (Obrigatório)")
-                    f_tel = st.text_input("Telefone/WhatsApp", value=dados_originais.get('paciente_telefone', ''))
-                
-                with c2:
-                    f_conv = st.text_input("Convênio", value=dados_originais.get('paciente_convenio', 'PARTICULAR'))
-                    f_email = st.text_input("E-mail (Opcional)")
+            btn_checkin = st.form_submit_button("💾 Salvar Cadastro e Iniciar Atendimento", use_container_width=True)
 
-                st.markdown("---")
-                st.subheader("📍 Endereço Residencial")
-                
-                ce1, ce2, ce3 = st.columns([2, 3, 1])
-                f_cep = ce1.text_input("CEP")
-                f_rua = ce2.text_input("Logradouro (Rua/Avenida)")
-                f_num = ce3.text_input("Nº")
+            if btn_checkin:
+                if not f_cpf or not f_nome:
+                    st.error("⚠️ Nome e CPF são obrigatórios.")
+                else:
+                    try:
+                        # 4. GRAVAR/ATUALIZAR NA TABELA PACIENTES (UPSERT)
+                        # O 'upsert' insere se não existir ou atualiza se o CPF já estiver lá
+                        ficha_paciente = {
+                            "cpf": f_cpf, "nome": f_nome.upper(), "data_nascimento": f_nasc.isoformat(),
+                            "telefone": f_tel, "convenio": f_conv.upper(), "email": f_email.lower(),
+                            "cep": f_cep, "rua": f_rua, "numero": f_num, "complemento": f_comp,
+                            "bairro": f_bairro, "cidade": f_cid, "uf": f_uf.upper()
+                        }
+                        supabase.table("PACIENTES").upsert(ficha_paciente).execute()
 
-                ce4, ce5, ce6 = st.columns([2, 2, 1])
-                f_comp = ce4.text_input("Complemento")
-                f_bairro = ce5.text_input("Bairro")
-                f_uf = ce6.text_input("Estado (UF)", value="MG", max_chars=2)
-                
-                f_cidade = st.text_input("Cidade", value="Belo Horizonte")
+                        # 5. ENVIAR PARA A FILA DO MÉDICO (ATENDIMENTOS)
+                        atend_payload = {
+                            "paciente": f_nome.upper(), "cpf": f_cpf, "status": "Aguardando",
+                            "unidade": "Sede", # Pode puxar da agenda
+                            "medico": "A DEFINIR", # Pode puxar da agenda
+                            "triagem": f"NASC: {f_nasc.strftime('%d/%m/%Y')} | TEL: {f_tel} | CONV: {f_conv}",
+                            "data_hora": dt_lib.datetime.now().isoformat()
+                        }
+                        supabase.table("ATENDIMENTOS").insert(atend_payload).execute()
 
-                st.markdown("---")
-                f_obs = st.text_area("Observações Internas", placeholder="Ex: Paciente aguarda no carro...")
+                        st.success(f"✅ Cadastro de {f_nome.upper()} atualizado e enviado para o médico!")
+                        st.rerun()
+                    except Exception as e:
+                        st.error(f"Erro ao processar: {e}")
 
-                if st.form_submit_button("Finalizar Check-in e Enviar ao Médico"):
-                    if not f_cpf or not f_nome:
-                        st.error("⚠️ Nome e CPF são obrigatórios.")
-                    else:
-                        try:
-                            # Montagem do endereço para o prontuário
-                            endereco_formatado = f"{f_rua}, {f_num} ({f_comp}), {f_bairro}, {f_cidade}-{f_uf} | CEP: {f_cep}"
-                            
-                            payload_atendimento = {
-                                "paciente": f_nome.upper(),
-                                "cpf": f_cpf,
-                                "unidade": dados_originais.get('unidade', 'Sede'),
-                                "medico": dados_originais['MEDICOS']['nome'],
-                                "triagem": f"TEL: {f_tel} | CONV: {f_conv} | END: {endereco_formatado}",
-                                "status": "Aguardando",
-                                "data_hora": dt_lib.datetime.now().isoformat()
-                            }
-                            
-                            supabase.table("ATENDIMENTOS").insert(payload_atendimento).execute()
-                            
-                            # Atualiza status na agenda para evitar duplicidade na recepção
-                            supabase.table("CONSULTAS").update({"status": "Em Atendimento"}).eq("id", dados_originais['id']).execute()
-
-                            st.success(f"✅ Check-in de {f_nome.upper()} concluído! Aguardando o médico.")
-                            st.rerun()
-                            
-                        except Exception as e:
-                            st.error(f"Erro ao salvar: {e}")
 
 
 
