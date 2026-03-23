@@ -879,8 +879,10 @@ CREATE TABLE IF NOT EXISTS ATENDIMENTOS (
 
 
 
+
+
 # ==========================================================
-# TELA 10: RECEPÇÃO E CHECK-IN (SOMENTE PYTHON)
+# TELA 10: RECEPÇÃO E CHECK-IN (CÓDIGO PYTHON CORRETO)
 # ==========================================================
 elif menu == "10. Recepção e Triagem":
     if verificar_senha():
