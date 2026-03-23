@@ -878,6 +878,7 @@ CREATE TABLE IF NOT EXISTS ATENDIMENTOS (
 
 
 
+
 # ==========================================================
 # TELA 10: RECEPÇÃO E CHECK-IN (PYTHON APENAS)
 # ==========================================================
@@ -952,7 +953,6 @@ if menu == "10. Recepção e Triagem":
                         st.rerun()
                     except Exception as e:
                         st.error(f"Erro ao salvar: {e}")
-
 
 
 
