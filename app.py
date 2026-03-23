@@ -847,7 +847,7 @@ if navegador == "9. Gestão de Especialidades":
 
 
 # ==========================================================
-# TELA 10: RECEPÇÃO (FILTRO POR UNIDADE + AUTO-PREENCHIMENTO)
+# TELA 10: RECEPÇÃO (VERSÃO FINAL - DATA BRASIL)
 # ==========================================================
 if menu == "10. Recepção e Triagem":
     if verificar_senha():
@@ -855,7 +855,7 @@ if menu == "10. Recepção e Triagem":
         st.caption("Filtre por unidade para visualizar os agendamentos do dia.")
         st.markdown("---")
 
-        # 1. SELEÇÃO DA UNIDADE (Para filtrar a agenda)
+        # 1. SELEÇÃO DA UNIDADE
         unidades_disponiveis = [
             "Pç 7 Rua Carijos 424 SL 2213", 
             "Pç 7 Rua Rio de Janeiro 462 SL 303", 
@@ -864,55 +864,51 @@ if menu == "10. Recepção e Triagem":
         ]
         u_trabalho = st.selectbox("📍 Selecione sua Unidade de Trabalho:", unidades_disponiveis)
 
-        # 2. BUSCA AGENDA DO DIA ESPECÍFICA DA UNIDADE
+        # 2. BUSCA AGENDA DO DIA
         hoje = dt_lib.datetime.now().date().isoformat()
         
-        # Filtramos por Data, Status 'Marcada' e a Unidade selecionada
         res_agenda = supabase.table("CONSULTAS")\
             .select("*, MEDICOS(nome, unidade)")\
             .eq("status", "Marcada")\
             .gte("data_hora", hoje)\
             .execute()
         
-        # Filtragem manual para garantir que a unidade do médico bata com a selecionada
         lista_pacientes_unidade = []
         if res_agenda.data:
             df_ag = pd.DataFrame(res_agenda.data)
-            # Filtra apenas onde a unidade do médico é a mesma selecionada na recepção
             df_unidade = df_ag[df_ag['MEDICOS'].apply(lambda x: x['unidade'] == u_trabalho)].copy()
             
             if not df_unidade.empty:
                 df_unidade['display'] = df_unidade['paciente_nome'].str.upper() + " " + df_unidade['paciente_sobrenome'].str.upper()
                 lista_pacientes_unidade = df_unidade.sort_values('display')['display'].tolist()
 
-        # 3. BUSCA E CARREGAMENTO DE DADOS
+        # 3. BUSCA E CARREGAMENTO
         col_b1, col_b2 = st.columns(2)
         with col_b1:
             paciente_agendado = st.selectbox(f"👥 Pacientes de Hoje ({u_trabalho})", ["-- Selecione --"] + lista_pacientes_unidade)
         with col_b2:
-            cpf_busca = st.text_input("🔍 Buscar por CPF (Para atualizar/carregar cadastro):")
+            cpf_busca = st.text_input("🔍 Buscar por CPF (Para carregar cadastro):")
 
-        # Lógica de Auto-preenchimento
         dados_carregados = {}
         if cpf_busca:
             res_p = supabase.table("PACIENTES").select("*").eq("cpf", cpf_busca).execute()
             if res_p.data:
                 dados_carregados = res_p.data[0]
-                st.success("✅ Dados do paciente carregados com sucesso!")
+                st.success("✅ Dados carregados com sucesso!")
 
         st.markdown("---")
         
-        # 4. FORMULÁRIO DE CADASTRO E CHECK-IN
-        with st.form("form_checkin_unidade", clear_on_submit=False):
+        # 4. FORMULÁRIO COM DATA FORMATO BRASIL
+        with st.form("form_checkin_br", clear_on_submit=False):
             st.subheader("📝 Ficha do Paciente")
             
             c1, c2, c3 = st.columns([3, 2, 2])
             f_nome = c1.text_input("Nome Completo", value=dados_carregados.get('nome', paciente_agendado if paciente_agendado != "-- Selecione --" else ""))
             f_cpf = c2.text_input("CPF (ID Único)", value=cpf_busca if cpf_busca else dados_carregados.get('cpf', ""))
             
-            # Campo de Data de Nascimento
-            val_nasc = pd.to_datetime(dados_carregados.get('data_nascimento')).date() if dados_carregados.get('data_nascimento') else dt_lib.date(1990, 1, 1)
-            f_nasc = c3.date_input("Data de Nascimento", value=val_nasc)
+            # --- AJUSTE: DATA DE NASCIMENTO FORMATO BRASIL ---
+            val_nasc_base = pd.to_datetime(dados_carregados.get('data_nascimento')).date() if dados_carregados.get('data_nascimento') else dt_lib.date(1990, 1, 1)
+            f_nasc = c3.date_input("Data de Nascimento", value=val_nasc_base, format="DD/MM/YYYY")
 
             c4, c5, c6 = st.columns(3)
             f_tel = c4.text_input("Telefone/WhatsApp", value=dados_carregados.get('telefone', ""))
@@ -937,7 +933,7 @@ if menu == "10. Recepção e Triagem":
                     st.error("⚠️ Nome e CPF são obrigatórios.")
                 else:
                     try:
-                        # GRAVAÇÃO/ATUALIZAÇÃO NO BANCO (UPSERT)
+                        # 1. GRAVAÇÃO/ATUALIZAÇÃO (UPSERT)
                         ficha = {
                             "cpf": f_cpf, "nome": f_nome.upper(), "data_nascimento": f_nasc.isoformat(),
                             "telefone": f_tel, "convenio": f_conv.upper(), "email": f_email.lower(),
@@ -946,30 +942,31 @@ if menu == "10. Recepção e Triagem":
                         }
                         supabase.table("PACIENTES").upsert(ficha).execute()
 
-                        # ENVIO PARA FILA DO MÉDICO
-                        # Busca o nome do médico do agendamento original se existir
+                        # 2. BUSCA NOME DO MÉDICO
                         medico_nome = "A DEFINIR"
                         if paciente_agendado != "-- Selecione --":
                             medico_nome = df_unidade[df_unidade['display'] == paciente_agendado].iloc[0]['MEDICOS']['nome']
 
+                        # --- AJUSTE: ENVIO DA DATA FORMATADA PARA O MÉDICO ---
+                        data_nasc_br = f_nasc.strftime('%d/%m/%Y')
+                        
                         atend_payload = {
                             "paciente": f_nome.upper(), "cpf": f_cpf, "status": "Aguardando",
                             "unidade": u_trabalho, "medico": medico_nome,
-                            "triagem": f"NASC: {f_nasc.strftime('%d/%m/%Y')} | TEL: {f_tel} | CONV: {f_conv}",
+                            "triagem": f"NASC: {data_nasc_br} | TEL: {f_tel} | CONV: {f_conv}",
                             "data_hora": dt_lib.datetime.now().isoformat()
                         }
                         supabase.table("ATENDIMENTOS").insert(atend_payload).execute()
 
-                        # Atualiza agenda para 'Em Atendimento'
+                        # 3. ATUALIZA AGENDA
                         if paciente_agendado != "-- Selecione --":
                             id_ag = df_unidade[df_unidade['display'] == paciente_agendado].iloc[0]['id']
                             supabase.table("CONSULTAS").update({"status": "Em Atendimento"}).eq("id", id_ag).execute()
 
-                        st.success(f"✅ Check-in de {f_nome.upper()} realizado com sucesso!")
+                        st.success(f"✅ Check-in de {f_nome.upper()} (Nasc: {data_nasc_br}) realizado!")
                         st.rerun()
                     except Exception as e:
                         st.error(f"Erro: {e}")
-
 
 
 
