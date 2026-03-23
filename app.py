@@ -841,8 +841,9 @@ if navegador == "9. Gestão de Especialidades":
 
 
 
+
 # ==========================================================
-# TELA: RECEPÇÃO (CHECK-IN)
+# TELA 10: RECEPÇÃO (CHECK-IN) - CORRIGIDA
 # ==========================================================
 if menu == "10. Recepção e Triagem":
     if verificar_senha():
@@ -852,42 +853,59 @@ if menu == "10. Recepção e Triagem":
         with st.form("form_recepcao", clear_on_submit=True):
             st.subheader("Dados de Identificação")
             col1, col2 = st.columns(2)
+            
             with col1:
                 p_nome = st.text_input("Nome Completo do Paciente")
                 p_cpf = st.text_input("CPF")
+            
             with col2:
-                # Busca unidades direto do seu banco (função que já criamos)
-                p_unidade = st.selectbox("Unidade de Atendimento", buscar_unidades_reais())
+                # 🔹 TENTATIVA DE BUSCAR UNIDADES DO BANCO
+                try:
+                    res_u = supabase.table("UNIDADES").select("nome").execute()
+                    lista_u = sorted([i['nome'] for i in res_u.data]) if res_u.data else ["Unidade Padrão"]
+                except:
+                    # Caso a tabela UNIDADES ainda não exista, ele não trava o sistema
+                    lista_u = ["Pç 7 Rua Carijos", "Pç 7 Rua Rio de Janeiro", "Eldorado 4408", "Eldorado 5959"]
+                
+                p_unidade = st.selectbox("Unidade de Atendimento", lista_u)
                 p_medico = st.text_input("Médico Solicitado")
 
             st.markdown("---")
-            st.subheader("Triagem Inicial (Dados Clínicos)")
+            st.subheader("Triagem Inicial (Sinais Vitais)")
             c1, c2, c3 = st.columns(3)
             p_pa = c1.text_input("Pressão Arterial (ex: 12/8)")
             p_peso = c2.text_input("Peso (kg)")
             p_temp = c3.text_input("Temperatura (°C)")
 
-            if st.form_submit_button("Confirmar Chegada"):
+            # 🔹 BOTÃO DE SUBMIT (OBRIGATÓRIO DENTRO DO FORM)
+            btn_salvar = st.form_submit_button("Confirmar Chegada e Iniciar Espera")
+
+            if btn_salvar:
                 if p_nome and p_cpf:
-                    payload = {
-                        "paciente": p_nome.upper(),
-                        "cpf": p_cpf,
-                        "unidade": p_unidade,
-                        "medico": p_medico.upper(),
-                        "triagem": f"PA: {p_pa} | Peso: {p_peso}kg | Temp: {p_temp}°C",
-                        "status": "Aguardando",
-                        "data_hora": dt_lib.datetime.now().isoformat()
-                    }
-                    supabase.table("ATENDIMENTOS").insert(payload).execute()
-                    st.success(f"✅ Check-in de {p_nome.upper()} realizado! Paciente em espera.")
+                    try:
+                        payload = {
+                            "paciente": p_nome.upper(),
+                            "cpf": p_cpf,
+                            "unidade": p_unidade,
+                            "medico": p_medico.upper(),
+                            "triagem": f"PA: {p_pa} | Peso: {p_peso}kg | Temp: {p_temp}°C",
+                            "status": "Aguardando",
+                            "data_hora": dt_lib.datetime.now().isoformat()
+                        }
+                        supabase.table("ATENDIMENTOS").insert(payload).execute()
+                        st.success(f"✅ Check-in de {p_nome.upper()} realizado com sucesso!")
+                    except Exception as e:
+                        st.error(f"Erro ao salvar no banco: {e}. Verifique se a tabela 'ATENDIMENTOS' foi criada no Supabase.")
                 else:
-                    st.error("Por favor, preencha Nome e CPF.")
+                    st.warning("⚠️ Nome e CPF são campos obrigatórios.")
+
+
 
 
 
 
 # ==========================================================
-# TELA: PRONTUÁRIO MÉDICO (ATENDIMENTO)
+# TELA 11: PRONTUÁRIO MÉDICO (ATENDIMENTO)
 # ==========================================================
 if menu == "11. Prontuário Médico":
     if verificar_senha():
