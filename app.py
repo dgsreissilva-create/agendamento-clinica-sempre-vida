@@ -38,7 +38,7 @@ menu = st.sidebar.radio("Navegação", [
     "6. Excluir Grade Aberta",
     "7. Excluir Cadastro de Médico",
     "8. Relatório Gerencial",
-    "9. Gestão de Especialidades"
+    "9. Gestão de Especialidades",
     "10. Recepção e Triagem",
     "11. Prontuário Médico"
     
