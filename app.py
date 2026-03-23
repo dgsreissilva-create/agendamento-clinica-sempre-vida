@@ -39,6 +39,8 @@ menu = st.sidebar.radio("Navegação", [
     "7. Excluir Cadastro de Médico",
     "8. Relatório Gerencial",
     "9. Gestão de Especialidades"
+    "10. Recepção e Triagem",
+    "11. Prontuário Médico"
     
 ], index=2)
 
@@ -881,3 +883,66 @@ if menu == "10. Recepção e Triagem":
                 else:
                     st.error("Por favor, preencha Nome e CPF.")
 
+
+
+
+# ==========================================================
+# TELA: PRONTUÁRIO MÉDICO (ATENDIMENTO)
+# ==========================================================
+if menu == "11. Prontuário Médico":
+    if verificar_senha():
+        st.title("🩺 Prontuário Eletrônico do Paciente")
+        st.caption("Padrão de Registro Clínico - Conselho Federal de Medicina")
+        st.markdown("---")
+
+        # 1. BUSCA PACIENTES AGUARDANDO
+        res_fila = supabase.table("ATENDIMENTOS").select("*").eq("status", "Aguardando").execute()
+        pacientes_espera = res_fila.data if res_fila.data else []
+
+        if not pacientes_espera:
+            st.info("ℹ️ Não há pacientes aguardando atendimento no momento.")
+        else:
+            # Lista de nomes para o médico escolher
+            nomes_fila = [p['paciente'] for p in pacientes_espera]
+            p_escolhido = st.selectbox("Selecione o Paciente para Iniciar Atendimento", nomes_fila)
+            
+            # Recupera os dados do paciente selecionado
+            dados_atend = next(item for item in pacientes_espera if item['paciente'] == p_escolhido)
+            
+            # Exibe a Triagem feita na Recepção
+            st.warning(f"**Dados de Triagem:** {dados_atend['triagem']}")
+            
+            st.markdown("---")
+
+            # 2. FORMULÁRIO MÉDICO (ESTRUTURA CFM)
+            with st.form("form_prontuario"):
+                st.subheader("Registro Clínico")
+                
+                # Histórico (Anamnese)
+                p_historico = st.text_area("1. Histórico (Anamnese e Queixas)", 
+                                         placeholder="Descreva o histórico da doença e queixas atuais do paciente...", height=150)
+                
+                # Diagnóstico (Hipótese e Exame Físico)
+                p_diagnostico = st.text_area("2. Diagnóstico (Exame Físico e Hipóteses)", 
+                                           placeholder="Descreva as observações do exame físico e as suspeitas diagnósticas...", height=150)
+                
+                # Tratamento (Conduta e Prescrição)
+                p_tratamento = st.text_area("3. Tratamento (Conduta e Prescrição)", 
+                                          placeholder="Descreva o tratamento, medicamentos prescritos e orientações finais...", height=150)
+
+                if st.form_submit_button("Finalizar Atendimento e Assinar"):
+                    if p_historico and p_tratamento:
+                        # Compila o prontuário em um texto único para o banco
+                        texto_final = f"HISTÓRICO: {p_historico}\n\nDIAGNÓSTICO: {p_diagnostico}\n\nTRATAMENTO: {p_tratamento}"
+                        
+                        # Atualiza o banco: Muda status para Finalizado e grava o prontuário
+                        supabase.table("ATENDIMENTOS").update({
+                            "prontuario_texto": texto_final,
+                            "status": "Finalizado"
+                        }).eq("id", dados_atend['id']).execute()
+                        
+                        st.success(f"✅ Atendimento de {p_escolhido} finalizado e arquivado com segurança.")
+                        st.balloons()
+                        st.rerun()
+                    else:
+                        st.error("⚠️ Segundo o CFM, os campos de Histórico e Tratamento são obrigatórios.")
