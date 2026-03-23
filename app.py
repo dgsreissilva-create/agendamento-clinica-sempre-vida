@@ -842,20 +842,20 @@ if navegador == "9. Gestão de Especialidades":
 
 
 
+
 # ==========================================================
-# TELA 10: RECEPÇÃO (CHECK-IN INTEGRADO COM AGENDA)
+# TELA 10: RECEPÇÃO (CHECK-IN INTEGRADO COM DADOS COMPLETOS)
 # ==========================================================
 if menu == "10. Recepção e Triagem":
     if verificar_senha():
         st.title("🛎️ Recepção - Check-in de Pacientes")
-        st.caption("Localize o paciente agendado para hoje e complete o cadastro.")
+        st.caption("Localize o paciente agendado e complete o cadastro de endereço e identificação.")
         st.markdown("---")
 
         # 1. BUSCA PACIENTES AGENDADOS PARA HOJE
         hoje_inicio = dt_lib.datetime.now().replace(hour=0, minute=0, second=0, microsecond=0).isoformat()
         hoje_fim = dt_lib.datetime.now().replace(hour=23, minute=59, second=59, microsecond=999).isoformat()
 
-        # Busca na tabela CONSULTAS quem está "Marcada" para hoje
         res_agenda = supabase.table("CONSULTAS") \
             .select("*, MEDICOS(nome)") \
             .eq("status", "Marcada") \
@@ -864,57 +864,64 @@ if menu == "10. Recepção e Triagem":
             .execute()
 
         if not res_agenda.data:
-            st.info("📅 Não há pacientes agendados para o dia de hoje.")
+            st.info("📅 Não há pacientes agendados para o dia de hoje no sistema.")
         else:
-            # Criar lista para o Selectbox (Nome + Horário) em Ordem Alfabética
             df_agenda = pd.DataFrame(res_agenda.data)
             df_agenda['display'] = df_agenda['paciente_nome'].str.upper() + " " + df_agenda['paciente_sobrenome'].str.upper()
-            df_agenda = df_agenda.sort_values(by='display')
+            df_agenda = df_agenda.sort_values(by='display') # ORDEM ALFABÉTICA
 
-            paciente_sel = st.selectbox("🔍 Localizar Paciente na Agenda de Hoje", df_agenda['display'].tolist())
-            
-            # Recupera os dados do registro selecionado
+            paciente_sel = st.selectbox("🔍 Selecione o Paciente da Agenda:", df_agenda['display'].tolist())
             dados_originais = df_agenda[df_agenda['display'] == paciente_sel].iloc[0]
 
             st.markdown("---")
-            with st.form("form_checkin", clear_on_submit=True):
-                st.subheader("📝 Complemento de Cadastro")
+            with st.form("form_checkin_completo", clear_on_submit=True):
+                st.subheader("📝 Dados de Identificação e Localização")
                 
                 c1, c2 = st.columns(2)
                 with c1:
                     f_nome = st.text_input("Nome Confirmado", value=paciente_sel, disabled=True)
+                    f_cpf = st.text_input("CPF (Obrigatório)")
                     f_tel = st.text_input("Telefone/WhatsApp", value=dados_originais.get('paciente_telefone', ''))
                     f_conv = st.text_input("Convênio", value=dados_originais.get('paciente_convenio', 'PARTICULAR'))
                 
                 with c2:
                     f_cep = st.text_input("CEP")
-                    f_end = st.text_input("Endereço Completo (Rua, Nº, Bairro)")
-                    f_obs = st.text_area("Observações da Recepção", placeholder="Ex: Paciente aguardando acompanhante...")
+                    f_end = st.text_input("Logradouro (Rua/Avenida e Número)")
+                    f_bairro = st.text_input("Bairro")
+                    f_cidade = st.text_input("Cidade", value="Belo Horizonte") # Valor padrão sugerido
 
-                # Botão de Finalizar Check-in
+                st.markdown("---")
+                f_obs = st.text_area("Observações Adicionais", placeholder="Ex: Paciente alérgico a iodo...")
+
                 if st.form_submit_button("Confirmar Presença e Enviar ao Médico"):
-                    try:
-                        # 2. ENVIAR PARA A TABELA DE ATENDIMENTOS (FILA DO MÉDICO)
-                        payload_atendimento = {
-                            "paciente": paciente_sel,
-                            "cpf": f_cep, # Aqui você pode usar o CEP ou criar coluna CPF na tabela
-                            "unidade": dados_originais.get('unidade', 'Sede'),
-                            "medico": dados_originais['MEDICOS']['nome'],
-                            "triagem": f"TEL: {f_tel} | CONV: {f_conv} | END: {f_end} | CEP: {f_cep}",
-                            "status": "Aguardando",
-                            "data_hora": dt_lib.datetime.now().isoformat()
-                        }
-                        
-                        supabase.table("ATENDIMENTOS").insert(payload_atendimento).execute()
-                        
-                        # 3. ATUALIZAR STATUS NA AGENDA (Opcional: mudar para 'Presente')
-                        supabase.table("CONSULTAS").update({"status": "Presente"}).eq("id", dados_originais['id']).execute()
+                    if not f_cpf:
+                        st.error("⚠️ O CPF é obrigatório para o prontuário eletrônico.")
+                    else:
+                        try:
+                            # 2. ENVIAR PARA A TABELA DE ATENDIMENTOS (FILA DO MÉDICO)
+                            # Consolidamos o endereço para o médico ler com facilidade
+                            endereco_completo = f"{f_end}, {f_bairro}, {f_cidade} - CEP: {f_cep}"
+                            
+                            payload_atendimento = {
+                                "paciente": paciente_sel,
+                                "cpf": f_cpf,
+                                "unidade": dados_originais.get('unidade', 'Sede'),
+                                "medico": dados_originais['MEDICOS']['nome'],
+                                "triagem": f"TEL: {f_tel} | CONV: {f_conv} | ENDEREÇO: {endereco_completo}",
+                                "status": "Aguardando",
+                                "data_hora": dt_lib.datetime.now().isoformat()
+                            }
+                            
+                            supabase.table("ATENDIMENTOS").insert(payload_atendimento).execute()
+                            
+                            # 3. ATUALIZA STATUS NA AGENDA PARA NÃO APARECER MAIS NA LISTA DE "PARA CHEGAR"
+                            supabase.table("CONSULTAS").update({"status": "Em Atendimento"}).eq("id", dados_originais['id']).execute()
 
-                        st.success(f"✅ Check-in de {paciente_sel} finalizado! Enviado para o Prontuário.")
-                        st.balloons()
-                    except Exception as e:
-                        st.error(f"Erro ao processar check-in: {e}")
-
+                            st.success(f"✅ Check-in de {paciente_sel} concluído! Paciente enviado para a fila do médico.")
+                            st.rerun()
+                            
+                        except Exception as e:
+                            st.error(f"Erro ao processar cadastro: {e}")
 
 
 
