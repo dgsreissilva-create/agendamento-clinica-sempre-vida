@@ -843,61 +843,78 @@ if navegador == "9. Gestão de Especialidades":
 
 
 # ==========================================================
-# TELA 10: RECEPÇÃO (CHECK-IN) - CORRIGIDA
+# TELA 10: RECEPÇÃO (CHECK-IN INTEGRADO COM AGENDA)
 # ==========================================================
 if menu == "10. Recepção e Triagem":
     if verificar_senha():
-        st.title("🛎️ Recepção - Check-in e Acolhimento")
+        st.title("🛎️ Recepção - Check-in de Pacientes")
+        st.caption("Localize o paciente agendado para hoje e complete o cadastro.")
         st.markdown("---")
 
-        with st.form("form_recepcao", clear_on_submit=True):
-            st.subheader("Dados de Identificação")
-            col1, col2 = st.columns(2)
+        # 1. BUSCA PACIENTES AGENDADOS PARA HOJE
+        hoje_inicio = dt_lib.datetime.now().replace(hour=0, minute=0, second=0, microsecond=0).isoformat()
+        hoje_fim = dt_lib.datetime.now().replace(hour=23, minute=59, second=59, microsecond=999).isoformat()
+
+        # Busca na tabela CONSULTAS quem está "Marcada" para hoje
+        res_agenda = supabase.table("CONSULTAS") \
+            .select("*, MEDICOS(nome)") \
+            .eq("status", "Marcada") \
+            .gte("data_hora", hoje_inicio) \
+            .lte("data_hora", hoje_fim) \
+            .execute()
+
+        if not res_agenda.data:
+            st.info("📅 Não há pacientes agendados para o dia de hoje.")
+        else:
+            # Criar lista para o Selectbox (Nome + Horário) em Ordem Alfabética
+            df_agenda = pd.DataFrame(res_agenda.data)
+            df_agenda['display'] = df_agenda['paciente_nome'].str.upper() + " " + df_agenda['paciente_sobrenome'].str.upper()
+            df_agenda = df_agenda.sort_values(by='display')
+
+            paciente_sel = st.selectbox("🔍 Localizar Paciente na Agenda de Hoje", df_agenda['display'].tolist())
             
-            with col1:
-                p_nome = st.text_input("Nome Completo do Paciente")
-                p_cpf = st.text_input("CPF")
-            
-            with col2:
-                # 🔹 TENTATIVA DE BUSCAR UNIDADES DO BANCO
-                try:
-                    res_u = supabase.table("UNIDADES").select("nome").execute()
-                    lista_u = sorted([i['nome'] for i in res_u.data]) if res_u.data else ["Unidade Padrão"]
-                except:
-                    # Caso a tabela UNIDADES ainda não exista, ele não trava o sistema
-                    lista_u = ["Pç 7 Rua Carijos", "Pç 7 Rua Rio de Janeiro", "Eldorado 4408", "Eldorado 5959"]
-                
-                p_unidade = st.selectbox("Unidade de Atendimento", lista_u)
-                p_medico = st.text_input("Médico Solicitado")
+            # Recupera os dados do registro selecionado
+            dados_originais = df_agenda[df_agenda['display'] == paciente_sel].iloc[0]
 
             st.markdown("---")
-            st.subheader("Triagem Inicial (Sinais Vitais)")
-            c1, c2, c3 = st.columns(3)
-            p_pa = c1.text_input("Pressão Arterial (ex: 12/8)")
-            p_peso = c2.text_input("Peso (kg)")
-            p_temp = c3.text_input("Temperatura (°C)")
+            with st.form("form_checkin", clear_on_submit=True):
+                st.subheader("📝 Complemento de Cadastro")
+                
+                c1, c2 = st.columns(2)
+                with c1:
+                    f_nome = st.text_input("Nome Confirmado", value=paciente_sel, disabled=True)
+                    f_tel = st.text_input("Telefone/WhatsApp", value=dados_originais.get('paciente_telefone', ''))
+                    f_conv = st.text_input("Convênio", value=dados_originais.get('paciente_convenio', 'PARTICULAR'))
+                
+                with c2:
+                    f_cep = st.text_input("CEP")
+                    f_end = st.text_input("Endereço Completo (Rua, Nº, Bairro)")
+                    f_obs = st.text_area("Observações da Recepção", placeholder="Ex: Paciente aguardando acompanhante...")
 
-            # 🔹 BOTÃO DE SUBMIT (OBRIGATÓRIO DENTRO DO FORM)
-            btn_salvar = st.form_submit_button("Confirmar Chegada e Iniciar Espera")
-
-            if btn_salvar:
-                if p_nome and p_cpf:
+                # Botão de Finalizar Check-in
+                if st.form_submit_button("Confirmar Presença e Enviar ao Médico"):
                     try:
-                        payload = {
-                            "paciente": p_nome.upper(),
-                            "cpf": p_cpf,
-                            "unidade": p_unidade,
-                            "medico": p_medico.upper(),
-                            "triagem": f"PA: {p_pa} | Peso: {p_peso}kg | Temp: {p_temp}°C",
+                        # 2. ENVIAR PARA A TABELA DE ATENDIMENTOS (FILA DO MÉDICO)
+                        payload_atendimento = {
+                            "paciente": paciente_sel,
+                            "cpf": f_cep, # Aqui você pode usar o CEP ou criar coluna CPF na tabela
+                            "unidade": dados_originais.get('unidade', 'Sede'),
+                            "medico": dados_originais['MEDICOS']['nome'],
+                            "triagem": f"TEL: {f_tel} | CONV: {f_conv} | END: {f_end} | CEP: {f_cep}",
                             "status": "Aguardando",
                             "data_hora": dt_lib.datetime.now().isoformat()
                         }
-                        supabase.table("ATENDIMENTOS").insert(payload).execute()
-                        st.success(f"✅ Check-in de {p_nome.upper()} realizado com sucesso!")
+                        
+                        supabase.table("ATENDIMENTOS").insert(payload_atendimento).execute()
+                        
+                        # 3. ATUALIZAR STATUS NA AGENDA (Opcional: mudar para 'Presente')
+                        supabase.table("CONSULTAS").update({"status": "Presente"}).eq("id", dados_originais['id']).execute()
+
+                        st.success(f"✅ Check-in de {paciente_sel} finalizado! Enviado para o Prontuário.")
+                        st.balloons()
                     except Exception as e:
-                        st.error(f"Erro ao salvar no banco: {e}. Verifique se a tabela 'ATENDIMENTOS' foi criada no Supabase.")
-                else:
-                    st.warning("⚠️ Nome e CPF são campos obrigatórios.")
+                        st.error(f"Erro ao processar check-in: {e}")
+
 
 
 
