@@ -847,8 +847,9 @@ if navegador == "9. Gestão de Especialidades":
 
 
 
+
 # ==========================================================
-# TELA 10: RECEPÇÃO (VERSÃO FINAL PROFISSIONAL)
+# TELA 10: RECEPÇÃO (VERSÃO FINAL AJUSTADA BR)
 # ==========================================================
 
 elif menu == "10. Recepção e Triagem":
@@ -916,7 +917,11 @@ elif menu == "10. Recepção e Triagem":
             cpf_busca = st.text_input("🔍 CPF")
 
         with col3:
-            data_busca = st.date_input("📅 Nascimento", value=None)
+            data_busca = st.date_input(
+                "📅 Nascimento",
+                value=None,
+                format="DD/MM/YYYY"
+            )
 
         dados_carregados = {}
 
@@ -977,11 +982,21 @@ elif menu == "10. Recepção e Triagem":
                 value=cpf_busca if cpf_busca else dados_carregados.get("cpf","")
             )
 
+            # DATA EM FORMATO BR
+            if dados_carregados.get("data_nascimento"):
+                try:
+                    data_padrao = pd.to_datetime(
+                        dados_carregados.get("data_nascimento")
+                    ).date()
+                except:
+                    data_padrao = dt_lib.date(2000,1,1)
+            else:
+                data_padrao = dt_lib.date(2000,1,1)
+
             f_nasc = c3.date_input(
                 "Nascimento",
-                value=pd.to_datetime(
-                    dados_carregados.get("data_nascimento","2000-01-01")
-                ).date()
+                value=data_padrao,
+                format="DD/MM/YYYY"
             )
 
             c4, c5, c6 = st.columns(3)
@@ -992,12 +1007,21 @@ elif menu == "10. Recepção e Triagem":
 
             st.subheader("Endereço")
 
-            f_cep = st.text_input("CEP", value=dados_carregados.get("cep",""))
-            f_rua = st.text_input("Rua", value=dados_carregados.get("rua",""))
-            f_num = st.text_input("Número", value=dados_carregados.get("numero",""))
-            f_bairro = st.text_input("Bairro", value=dados_carregados.get("bairro",""))
-            f_cid = st.text_input("Cidade", value=dados_carregados.get("cidade","Belo Horizonte"))
-            f_uf = st.text_input("UF", value=dados_carregados.get("uf","MG"))
+            # LINHA AJUSTADA (CEP + RUA)
+            ce1, ce2 = st.columns([1,4])
+            f_cep = ce1.text_input("CEP", value=dados_carregados.get("cep",""))
+            f_rua = ce2.text_input("Rua", value=dados_carregados.get("rua",""))
+
+            # LINHA AJUSTADA (NUMERO + COMPLEMENTO)
+            ce3, ce4 = st.columns([1,3])
+            f_num = ce3.text_input("Número", value=dados_carregados.get("numero",""))
+            f_comp = ce4.text_input("Complemento", value=dados_carregados.get("complemento",""))
+
+            # LINHA FINAL
+            ce5, ce6, ce7 = st.columns([2,2,1])
+            f_bairro = ce5.text_input("Bairro", value=dados_carregados.get("bairro",""))
+            f_cid = ce6.text_input("Cidade", value=dados_carregados.get("cidade","Belo Horizonte"))
+            f_uf = ce7.text_input("UF", value=dados_carregados.get("uf","MG"))
 
             # ==========================================================
             # 5. SALVAR
@@ -1009,7 +1033,6 @@ elif menu == "10. Recepção e Triagem":
                 else:
                     try:
 
-                        # gera id alternativo se não tiver cpf
                         if not f_cpf:
                             f_cpf = f"SEMCPF_{int(dt_lib.datetime.now().timestamp())}"
 
@@ -1023,6 +1046,7 @@ elif menu == "10. Recepção e Triagem":
                             "cep": f_cep,
                             "rua": f_rua,
                             "numero": f_num,
+                            "complemento": f_comp,
                             "bairro": f_bairro,
                             "cidade": f_cid,
                             "uf": f_uf.upper()
@@ -1049,13 +1073,11 @@ elif menu == "10. Recepção e Triagem":
 
                         supabase.table("atendimentos").insert(atend).execute()
 
-                        st.success("✅ Check-in realizado")
+                        st.success("✅ Informações salvas no prontuário")
                         st.rerun()
 
                     except Exception as e:
                         st.error(f"Erro: {e}")
-
-
 
 
 
