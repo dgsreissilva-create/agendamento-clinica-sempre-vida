@@ -840,6 +840,7 @@ if navegador == "9. Gestão de Especialidades":
 
 
 
+
 # =========================================================
 # TELA 10 - CADASTRO DE PACIENTES (VERSÃO ESTÁVEL)
 # =========================================================
