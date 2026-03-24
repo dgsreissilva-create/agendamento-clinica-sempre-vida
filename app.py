@@ -1100,66 +1100,131 @@ elif menu == "10. Recepção e Triagem":
 
 
 
-
 # ==========================================================
 # TELA: PRONTUÁRIO MÉDICO (ATENDIMENTO)
 # ==========================================================
 if menu == "11. Prontuário Médico":
     if verificar_senha():
+
         st.title("🩺 Prontuário Eletrônico do Paciente")
         st.caption("Padrão de Registro Clínico - Conselho Federal de Medicina")
         st.markdown("---")
 
-        # 1. BUSCA PACIENTES AGUARDANDO
-        res_fila = supabase.table("atendimentos").select("*").eq("status", "Aguardando").execute()
-        pacientes_espera = res_fila.data if res_fila.data else []
+        # ==========================================================
+        # 🔔 MENSAGEM PÓS-SALVAMENTO
+        # ==========================================================
+        if "msg_prontuario" in st.session_state:
+            st.success(st.session_state["msg_prontuario"])
+            del st.session_state["msg_prontuario"]
 
+        # ==========================================================
+        # 1. BUSCA PACIENTES AGUARDANDO
+        # ==========================================================
+        try:
+            res_fila = supabase.table("atendimentos")\
+                .select("*")\
+                .eq("status", "Aguardando")\
+                .execute()
+
+            pacientes_espera = res_fila.data if res_fila.data else []
+
+        except Exception as e:
+            st.error(f"Erro ao carregar fila: {e}")
+            pacientes_espera = []
+
+        # ==========================================================
+        # 2. LISTA DE PACIENTES
+        # ==========================================================
         if not pacientes_espera:
             st.info("ℹ️ Não há pacientes aguardando atendimento no momento.")
         else:
-            nomes_fila = [p['paciente'] for p in pacientes_espera]
-            p_escolhido = st.selectbox("Selecione o Paciente para Iniciar Atendimento", nomes_fila)
-            
-            dados_atend = next(item for item in pacientes_espera if item['paciente'] == p_escolhido)
-            
-            st.warning(f"**Dados de Triagem:** {dados_atend['triagem']}")
-            
+            try:
+                nomes_fila = [
+                    p.get('paciente', 'SEM NOME')
+                    for p in pacientes_espera
+                ]
+
+                p_escolhido = st.selectbox(
+                    "Selecione o Paciente para Iniciar Atendimento",
+                    nomes_fila
+                )
+
+                dados_atend = next(
+                    item for item in pacientes_espera
+                    if item.get('paciente') == p_escolhido
+                )
+
+            except Exception as e:
+                st.error(f"Erro ao processar fila: {e}")
+                st.stop()
+
+            # ==========================================================
+            # 3. TRIAGEM
+            # ==========================================================
+            triagem_txt = dados_atend.get('triagem', 'Sem dados de triagem')
+            st.warning(f"**Dados de Triagem:** {triagem_txt}")
+
             st.markdown("---")
 
-            # 2. FORMULÁRIO MÉDICO
+            # ==========================================================
+            # 4. FORMULÁRIO MÉDICO
+            # ==========================================================
             with st.form("form_prontuario"):
+
                 st.subheader("Registro Clínico")
-                
+
                 p_historico = st.text_area(
-                    "1. Histórico (Anamnese e Queixas)", 
-                    placeholder="Descreva o histórico da doença e queixas atuais do paciente...", 
+                    "1. Histórico (Anamnese e Queixas)",
+                    placeholder="Descreva o histórico da doença e queixas atuais do paciente...",
                     height=150
                 )
-                
+
                 p_diagnostico = st.text_area(
-                    "2. Diagnóstico (Exame Físico e Hipóteses)", 
-                    placeholder="Descreva as observações do exame físico e as suspeitas diagnósticas...", 
+                    "2. Diagnóstico (Exame Físico e Hipóteses)",
+                    placeholder="Descreva as observações do exame físico e as suspeitas diagnósticas...",
                     height=150
                 )
-                
+
                 p_tratamento = st.text_area(
-                    "3. Tratamento (Conduta e Prescrição)", 
-                    placeholder="Descreva o tratamento, medicamentos prescritos e orientações finais...", 
+                    "3. Tratamento (Conduta e Prescrição)",
+                    placeholder="Descreva o tratamento, medicamentos prescritos e orientações finais...",
                     height=150
                 )
 
+                # ==========================================================
+                # 5. FINALIZAR ATENDIMENTO
+                # ==========================================================
                 if st.form_submit_button("Finalizar Atendimento e Assinar"):
-                    if p_historico and p_tratamento:
 
-                        texto_final = f"HISTÓRICO: {p_historico}\n\nDIAGNÓSTICO: {p_diagnostico}\n\nTRATAMENTO: {p_tratamento}"
-                        
-                        supabase.table("atendimentos").update({
-                            "prontuario_texto": texto_final,
-                            "status": "Finalizado"
-                        }).eq("id", dados_atend['id']).execute()
-                        
-                        st.success(f"✅ Atendimento de {p_escolhido} finalizado e arquivado com segurança.")
-                        st.balloons()
-                        st.rerun()
-                    else:
+                    if not p_historico or not p_tratamento:
                         st.error("⚠️ Segundo o CFM, os campos de Histórico e Tratamento são obrigatórios.")
+                    else:
+                        try:
+
+                            texto_final = (
+                                f"HISTÓRICO: {p_historico}\n\n"
+                                f"DIAGNÓSTICO: {p_diagnostico}\n\n"
+                                f"TRATAMENTO: {p_tratamento}"
+                            )
+
+                            supabase.table("atendimentos")\
+                                .update({
+                                    "prontuario_texto": texto_final,
+                                    "status": "Finalizado"
+                                })\
+                                .eq("id", dados_atend.get('id'))\
+                                .execute()
+
+                            # 🔔 Mensagem persistente após reload
+                            st.session_state["msg_prontuario"] = "Informações salvas no prontuário"
+
+                            st.success(f"✅ Atendimento de {p_escolhido} finalizado com sucesso.")
+                            st.balloons()
+
+                            try:
+                                st.rerun()
+                            except:
+                                pass
+
+                        except Exception as e:
+                            st.error(f"❌ Erro ao salvar prontuário: {e}")
