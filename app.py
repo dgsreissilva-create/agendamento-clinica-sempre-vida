@@ -1070,7 +1070,7 @@ elif menu == "10. Recepção e Triagem":
                             "data_hora": dt_lib.datetime.now().isoformat()
                         }
 
-                        supabase.table("ATENDIMENTOS").insert(atend_payload).execute()
+                        supabase.table("atendimentos").insert(atend_payload).execute()
 
                         if paciente_agendado != "-- Selecione --" and not df_unidade.empty:
                             id_ag = df_unidade[
