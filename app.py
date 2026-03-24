@@ -885,6 +885,7 @@ elif menu == "10. Recepção e Triagem":
         df_unidade = pd.DataFrame()
 
         if res_agenda.data:
+
             df_ag = pd.DataFrame(res_agenda.data)
 
             df_unidade = df_ag[
@@ -894,11 +895,15 @@ elif menu == "10. Recepção e Triagem":
             ].copy()
 
             if not df_unidade.empty:
+
                 df_unidade['display'] = (
                     df_unidade['paciente_nome'].fillna('').str.upper() + " " +
                     df_unidade['paciente_sobrenome'].fillna('').str.upper()
                 )
-                lista_pacientes_unidade = sorted(df_unidade['display'].tolist())
+
+                lista_pacientes_unidade = sorted(
+                    df_unidade['display'].tolist()
+                )
 
         # ==========================================================
         # 3. BUSCA (CPF OU DATA NASCIMENTO)
@@ -925,6 +930,7 @@ elif menu == "10. Recepção e Triagem":
 
         try:
 
+            # ---------------- CPF ----------------
             if cpf_busca and cpf_busca.strip() != "":
 
                 res_p = supabase.table("pacientes") \
@@ -938,13 +944,20 @@ elif menu == "10. Recepção e Triagem":
                 else:
                     st.warning("⚠️ CPF não encontrado")
 
-       elif data_busca:
+            # ---------------- DATA NASCIMENTO ----------------
+            elif data_busca:
 
-    res_p = supabase.table("pacientes") \
-        .select("*") \
-        .eq("data_nascimento", data_busca.isoformat()) \
-        .execute()
+                data_inicio = data_busca.isoformat() + "T00:00:00"
+                data_fim = data_busca.isoformat() + "T23:59:59"
+
+                res_p = supabase.table("pacientes") \
+                    .select("*") \
+                    .gte("data_nascimento", data_inicio) \
+                    .lte("data_nascimento", data_fim) \
+                    .execute()
+
                 if res_p.data:
+
                     df_p = pd.DataFrame(res_p.data)
 
                     df_p['display'] = (
@@ -958,6 +971,7 @@ elif menu == "10. Recepção e Triagem":
                     )
 
                     if paciente_sel != "Selecione":
+
                         dados_carregados = df_p[
                             df_p['display'] == paciente_sel
                         ].iloc[0].to_dict()
@@ -1035,7 +1049,7 @@ elif menu == "10. Recepção e Triagem":
             if st.form_submit_button("🚀 Finalizar Check-in"):
 
                 if not f_nome:
-                    st.error("Nome obrigatório")
+                    st.error("⚠️ Nome obrigatório")
                 else:
                     try:
 
@@ -1083,7 +1097,7 @@ elif menu == "10. Recepção e Triagem":
                         st.rerun()
 
                     except Exception as e:
-                        st.error(f"Erro: {e}")
+                        st.error(f"❌ Erro: {e}")
 
 
 
