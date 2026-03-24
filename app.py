@@ -38,8 +38,8 @@ menu = st.sidebar.radio("Navegação", [
     "6. Excluir Grade Aberta",
     "7. Excluir Cadastro de Médico",
     "8. Relatório Gerencial",
-    "9. Gestão de Especialidades",
-    "10. Cadastro de Pacientes"
+    "9. Gestão de Especialidades"
+  
     
 ], index=2)
 
@@ -843,68 +843,3 @@ if navegador == "9. Gestão de Especialidades":
 
 
 
-
-# ==========================================================
-# TELA 10: CADASTRO ÚNICO (SINCRONIZADA COM A SUA FOTO)
-# ==========================================================
-elif menu == "10. Cadastro de Pacientes": # <-- PRECISA SER IGUAL À FOTO
-    if verificar_senha():
-        st.header("🧾 Ficha do Paciente")
-        st.caption("Digite o CPF para carregar dados ou cadastrar novo paciente.")
-
-        # 1. Campo de busca por CPF
-        cpf_busca = st.text_input("🔍 Buscar por CPF para auto-preenchimento:")
-
-        # Lógica de busca no banco
-        dados_p = {}
-        if cpf_busca:
-            try:
-                res = supabase.table("PACIENTES").select("*").eq("cpf", cpf_busca).execute()
-                if res.data:
-                    dados_p = res.data[0]
-                    st.success("✅ Cadastro localizado!")
-            except: pass
-
-        # 2. Formulário com correção de intervalo de DATA (para aceitar 1978)
-        with st.form("form_ficha_paciente", clear_on_submit=False):
-            c1, c2, c3 = st.columns([3, 2, 2])
-            
-            f_nome = c1.text_input("Nome Completo", value=dados_p.get('nome', ""))
-            f_cpf = c2.text_input("CPF", value=cpf_busca if cpf_busca else dados_p.get('cpf', ""))
-            
-            # --- CORREÇÃO DO ERRO DA FOTO (Data de 1900 até hoje) ---
-            v_nasc = pd.to_datetime(dados_p.get('data_nascimento')).date() if dados_p.get('data_nascimento') else dt_lib.date(1980, 1, 1)
-            f_nasc = c3.date_input("Nascimento", value=v_nasc, min_value=dt_lib.date(1900, 1, 1), max_value=dt_lib.date.today(), format="DD/MM/YYYY")
-
-            c4, c5, c6 = st.columns(3)
-            f_tel = c4.text_input("Telefone/WhatsApp", value=dados_p.get('telefone', ""))
-            f_conv = c5.text_input("Convênio", value=dados_p.get('convenio', "MC"))
-            f_email = c6.text_input("E-mail", value=dados_p.get('email', ""))
-
-            st.subheader("📍 Endereço Residencial")
-            ce1, ce2, ce3 = st.columns([2, 4, 1])
-            f_cep = ce1.text_input("CEP", value=dados_p.get('cep', ""))
-            f_rua = ce2.text_input("Rua/Avenida", value=dados_p.get('rua', ""))
-            f_num = ce3.text_input("Nº", value=dados_p.get('numero', ""))
-
-            ce4, ce5, ce6 = st.columns([2, 2, 1])
-            f_comp = ce4.text_input("Complemento", value=dados_p.get('complemento', ""))
-            f_ba = ce5.text_input("Bairro", value=dados_p.get('bairro', ""))
-            f_uf = ce6.text_input("UF", value=dados_p.get('uf', "MG"), max_chars=2)
-            
-            f_cid = st.text_input("Cidade", value=dados_p.get('cidade', "Belo Horizonte"))
-
-            if st.form_submit_button("💾 Salvar Cadastro"):
-                if f_nome and f_cpf:
-                    try:
-                        ficha = {
-                            "cpf": f_cpf, "nome": f_nome.upper(), "data_nascimento": f_nasc.isoformat(),
-                            "telefone": f_tel, "convenio": f_conv.upper(), "email": f_email.lower(),
-                            "cep": f_cep, "rua": f_rua, "numero": f_num, "complemento": f_comp,
-                            "bairro": f_ba, "cidade": f_cid, "uf": f_uf.upper()
-                        }
-                        supabase.table("PACIENTES").upsert(ficha).execute()
-                        st.success("✅ Cadastro salvo com sucesso!")
-                        st.rerun()
-                    except Exception as e:
-                        st.error(f"Erro ao salvar: {e}")
