@@ -841,7 +841,7 @@ if navegador == "9. Gestão de Especialidades":
 
 
 # =========================================================
-# TELA 10 - CADASTRO DE PACIENTES
+# TELA 10 - CADASTRO DE PACIENTES (VERSÃO ESTÁVEL)
 # =========================================================
 
 elif menu == "10. Cadastro de Pacientes":
@@ -857,7 +857,7 @@ elif menu == "10. Cadastro de Pacientes":
         nome = c1.text_input("Nome Completo *")
         cpf = c2.text_input("CPF *")
 
-        data_nascimento = c1.date_input("Data de Nascimento", format="DD/MM/YYYY")
+        data_nascimento = c1.date_input("Data de Nascimento")
         telefone = c2.text_input("Telefone")
 
         convenio = c1.text_input("Convênio")
@@ -889,7 +889,7 @@ elif menu == "10. Cadastro de Pacientes":
                     supabase.table("PACIENTES").upsert({
                         "cpf": cpf,
                         "nome": nome,
-                        "data_nascimento": str(data_nascimento) if data_nascimento else None,
+                        "data_nascimento": data_nascimento.isoformat() if data_nascimento else None,
                         "telefone": telefone,
                         "convenio": convenio,
                         "email": email,
@@ -903,7 +903,12 @@ elif menu == "10. Cadastro de Pacientes":
                     }).execute()
 
                     st.success("✅ Paciente cadastrado/atualizado com sucesso!")
-                    st.rerun()
+
+                    # 🔥 rerun seguro (evita tela branca em versões antigas)
+                    try:
+                        st.rerun()
+                    except:
+                        pass
 
                 except Exception as e:
                     st.error(f"❌ Erro ao salvar: {e}")
