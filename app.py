@@ -938,12 +938,16 @@ elif menu == "10. Recepção e Triagem":
                 else:
                     st.warning("⚠️ CPF não encontrado")
 
-            elif data_busca:
+         elif data_busca:
 
-                res_p = supabase.table("pacientes") \
-                    .select("*") \
-                    .eq("data_nascimento", data_busca.isoformat()) \
-                    .execute()
+    data_inicio = data_busca.isoformat() + "T00:00:00"
+    data_fim = data_busca.isoformat() + "T23:59:59"
+
+    res_p = supabase.table("pacientes") \
+        .select("*") \
+        .gte("data_nascimento", data_inicio) \
+        .lte("data_nascimento", data_fim) \
+        .execute()
 
                 if res_p.data:
                     df_p = pd.DataFrame(res_p.data)
