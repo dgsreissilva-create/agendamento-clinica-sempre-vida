@@ -844,7 +844,6 @@ if navegador == "9. Gestão de Especialidades":
 
 
 
-
 # ==========================================================
 # TELA 10: RECEPÇÃO (VERSÃO FINAL - ESTÁVEL E SEM ERROS)
 # ==========================================================
@@ -894,7 +893,7 @@ elif menu == "10. Recepção e Triagem":
 
             df_unidade = df_ag[
                 df_ag['MEDICOS'].apply(
-                    lambda x: x and x.get('unidade') == u_trabalho
+                    lambda x: isinstance(x, dict) and x.get('unidade') == u_trabalho
                 )
             ].copy()
 
@@ -930,7 +929,7 @@ elif menu == "10. Recepção e Triagem":
 
         if cpf_busca:
             try:
-                res_p = supabase.table("PACIENTES")\
+                res_p = supabase.table("pacientes")\
                     .select("*")\
                     .eq("cpf", cpf_busca)\
                     .execute()
@@ -952,10 +951,6 @@ elif menu == "10. Recepção e Triagem":
 
             st.subheader("📝 Ficha do Paciente")
 
-            # ===============================
-            # DADOS PRINCIPAIS
-            # ===============================
-
             c1, c2, c3 = st.columns([3, 2, 2])
 
             f_nome = c1.text_input(
@@ -971,7 +966,6 @@ elif menu == "10. Recepção e Triagem":
                 value=cpf_busca if cpf_busca else dados_carregados.get('cpf', "")
             )
 
-            # 🔒 DATA SEGURA (1900 até hoje)
             if dados_carregados.get('data_nascimento'):
                 try:
                     val_nasc_base = pd.to_datetime(
@@ -990,10 +984,6 @@ elif menu == "10. Recepção e Triagem":
                 format="DD/MM/YYYY"
             )
 
-            # ===============================
-            # CONTATOS
-            # ===============================
-
             c4, c5, c6 = st.columns(3)
 
             f_tel = c4.text_input(
@@ -1010,10 +1000,6 @@ elif menu == "10. Recepção e Triagem":
                 "E-mail",
                 value=dados_carregados.get('email', "")
             )
-
-            # ===============================
-            # ENDEREÇO
-            # ===============================
 
             st.subheader("📍 Endereço Residencial")
 
@@ -1047,7 +1033,6 @@ elif menu == "10. Recepção e Triagem":
                 else:
                     try:
 
-                        # 🔹 SALVA PACIENTE
                         ficha = {
                             "cpf": f_cpf,
                             "nome": f_nome.upper(),
@@ -1064,9 +1049,8 @@ elif menu == "10. Recepção e Triagem":
                             "uf": f_uf.upper()
                         }
 
-                        supabase.table("PACIENTES").upsert(ficha).execute()
+                        supabase.table("pacientes").upsert(ficha).execute()
 
-                        # 🔹 BUSCA MÉDICO
                         medico_nome = "A DEFINIR"
 
                         if paciente_agendado != "-- Selecione --" and not df_unidade.empty:
@@ -1074,10 +1058,8 @@ elif menu == "10. Recepção e Triagem":
                                 df_unidade['display'] == paciente_agendado
                             ].iloc[0]['MEDICOS']['nome']
 
-                        # 🔹 DATA FORMATADA
                         data_nasc_br = f_nasc.strftime('%d/%m/%Y')
 
-                        # 🔹 CRIA ATENDIMENTO
                         atend_payload = {
                             "paciente": f_nome.upper(),
                             "cpf": f_cpf,
@@ -1090,7 +1072,6 @@ elif menu == "10. Recepção e Triagem":
 
                         supabase.table("ATENDIMENTOS").insert(atend_payload).execute()
 
-                        # 🔹 ATUALIZA AGENDA
                         if paciente_agendado != "-- Selecione --" and not df_unidade.empty:
                             id_ag = df_unidade[
                                 df_unidade['display'] == paciente_agendado
