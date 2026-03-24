@@ -39,7 +39,7 @@ menu = st.sidebar.radio("Navegação", [
     "7. Excluir Cadastro de Médico",
     "8. Relatório Gerencial",
     "9. Gestão de Especialidades",
-    "10. Recepção e Triagem"
+    "10. Cadastro de Pacientes"
     
 ], index=2)
 
@@ -843,91 +843,68 @@ if navegador == "9. Gestão de Especialidades":
 
 
 
+
 # ==========================================================
-# TELA 10: RECEPÇÃO E TRIAGEM (VERSÃO FINAL SEM ERROS)
+# TELA 10: CADASTRO ÚNICO (SINCRONIZADA COM A SUA FOTO)
 # ==========================================================
-elif menu == "10. Recepção e Triagem":
+elif menu == "10. Cadastro de Pacientes": # <-- PRECISA SER IGUAL À FOTO
     if verificar_senha():
-        st.title("🛎️ Recepção - Check-in Inteligente")
-        st.caption("Filtre por unidade para visualizar os agendamentos do dia.")
-        st.markdown("---")
+        st.header("🧾 Ficha do Paciente")
+        st.caption("Digite o CPF para carregar dados ou cadastrar novo paciente.")
 
-        # 1. SELEÇÃO DA UNIDADE
-        unidades_lista = [
-            "Pç 7 Rua Carijos 424 SL 2213", 
-            "Pç 7 Rua Rio de Janeiro 462 SL 303", 
-            "Eldorado Av Jose Faria da Rocha 4408 2 and",
-            "Eldorado Av Jose Faria da Rocha 5959"
-        ]
-        u_trabalho = st.selectbox("📍 Unidade de Trabalho:", unidades_lista)
+        # 1. Campo de busca por CPF
+        cpf_busca = st.text_input("🔍 Buscar por CPF para auto-preenchimento:")
 
-        # 2. BUSCA AGENDA DO DIA
-        hoje = dt_lib.datetime.now().date().isoformat()
-        res_agenda = supabase.table("CONSULTAS").select("*, MEDICOS(nome, unidade)").eq("status", "Marcada").gte("data_hora", hoje).execute()
-        
-        lista_pacientes = []
-        df_unidade = pd.DataFrame()
-        
-        if res_agenda.data:
-            df_ag = pd.DataFrame(res_agenda.data)
-            df_unidade = df_ag[df_ag['MEDICOS'].apply(lambda x: x['unidade'] == u_trabalho)].copy()
-            if not df_unidade.empty:
-                df_unidade['display'] = df_unidade['paciente_nome'].str.upper() + " " + df_unidade['paciente_sobrenome'].str.upper()
-                lista_pacientes = df_unidade.sort_values('display')['display'].tolist()
-
-        # 3. BUSCA POR CPF E SELEÇÃO
-        c_b1, c_b2 = st.columns(2)
-        p_sel = c_b1.selectbox("👥 Pacientes de Hoje:", ["-- Selecione --"] + lista_pacientes)
-        cpf_b = c_b2.text_input("🔍 CPF (Carregar Cadastro):")
-
-        d_c = {}
-        if cpf_b:
+        # Lógica de busca no banco
+        dados_p = {}
+        if cpf_busca:
             try:
-                res_p = supabase.table("PACIENTES").select("*").eq("cpf", cpf_b).execute()
-                if res_p.data: d_c = res_p.data[0]
+                res = supabase.table("PACIENTES").select("*").eq("cpf", cpf_busca).execute()
+                if res.data:
+                    dados_p = res.data[0]
+                    st.success("✅ Cadastro localizado!")
             except: pass
 
-        # 4. FORMULÁRIO COMPLETO
-        with st.form("form_checkin_v10", clear_on_submit=False):
-            st.subheader("📝 Ficha do Paciente")
+        # 2. Formulário com correção de intervalo de DATA (para aceitar 1978)
+        with st.form("form_ficha_paciente", clear_on_submit=False):
             c1, c2, c3 = st.columns([3, 2, 2])
-            f_nome = c1.text_input("Nome Completo", value=d_c.get('nome', p_sel if p_sel != "-- Selecione --" else ""))
-            f_cpf = c2.text_input("CPF *", value=cpf_b if cpf_b else d_c.get('cpf', ""))
             
-            # Correção de Data (1900 até Hoje)
-            v_nasc = pd.to_datetime(d_c.get('data_nascimento')).date() if d_c.get('data_nascimento') else dt_lib.date(1990, 1, 1)
-            f_nasc = c3.date_input("Nascimento", value=v_nasc, min_value=dt_lib.date(1900,1,1), max_value=dt_lib.date.today(), format="DD/MM/YYYY")
+            f_nome = c1.text_input("Nome Completo", value=dados_p.get('nome', ""))
+            f_cpf = c2.text_input("CPF", value=cpf_busca if cpf_busca else dados_p.get('cpf', ""))
+            
+            # --- CORREÇÃO DO ERRO DA FOTO (Data de 1900 até hoje) ---
+            v_nasc = pd.to_datetime(dados_p.get('data_nascimento')).date() if dados_p.get('data_nascimento') else dt_lib.date(1980, 1, 1)
+            f_nasc = c3.date_input("Nascimento", value=v_nasc, min_value=dt_lib.date(1900, 1, 1), max_value=dt_lib.date.today(), format="DD/MM/YYYY")
 
             c4, c5, c6 = st.columns(3)
-            f_tel = c4.text_input("WhatsApp", value=d_c.get('telefone', ""))
-            f_conv = c5.text_input("Convênio", value=d_c.get('convenio', "PARTICULAR"))
-            f_em = c6.text_input("E-mail", value=d_c.get('email', ""))
+            f_tel = c4.text_input("Telefone/WhatsApp", value=dados_p.get('telefone', ""))
+            f_conv = c5.text_input("Convênio", value=dados_p.get('convenio', "MC"))
+            f_email = c6.text_input("E-mail", value=dados_p.get('email', ""))
 
             st.subheader("📍 Endereço Residencial")
-            ce1, ce2, ce3, ce4 = st.columns([2, 3, 1, 2])
-            f_cep, f_rua = ce1.text_input("CEP", d_c.get('cep', "")), ce2.text_input("Rua", d_c.get('rua', ""))
-            f_num, f_ba = ce3.text_input("Nº", d_c.get('numero', "")), ce4.text_input("Bairro", d_c.get('bairro', ""))
+            ce1, ce2, ce3 = st.columns([2, 4, 1])
+            f_cep = ce1.text_input("CEP", value=dados_p.get('cep', ""))
+            f_rua = ce2.text_input("Rua/Avenida", value=dados_p.get('rua', ""))
+            f_num = ce3.text_input("Nº", value=dados_p.get('numero', ""))
+
+            ce4, ce5, ce6 = st.columns([2, 2, 1])
+            f_comp = ce4.text_input("Complemento", value=dados_p.get('complemento', ""))
+            f_ba = ce5.text_input("Bairro", value=dados_p.get('bairro', ""))
+            f_uf = ce6.text_input("UF", value=dados_p.get('uf', "MG"), max_chars=2)
             
-            ce5, ce6, ce7 = st.columns([2, 3, 1])
-            f_comp = ce5.text_input("Complemento", d_c.get('complemento', ""))
-            f_cid = ce6.text_input("Cidade", d_c.get('cidade', "Belo Horizonte"))
-            f_uf = ce7.text_input("UF", d_c.get('uf', "MG"), max_chars=2)
+            f_cid = st.text_input("Cidade", value=dados_p.get('cidade', "Belo Horizonte"))
 
-            if st.form_submit_button("🚀 FINALIZAR CHECK-IN", use_container_width=True):
-                if f_cpf and f_nome:
+            if st.form_submit_button("💾 Salvar Cadastro"):
+                if f_nome and f_cpf:
                     try:
-                        # Salva no Cadastro Único (PACIENTES)
-                        ficha = {"cpf": f_cpf, "nome": f_nome.upper(), "data_nascimento": f_nasc.isoformat(), "telefone": f_tel, "convenio": f_conv.upper(), "email": f_em.lower(), "cep": f_cep, "rua": f_rua, "numero": f_num, "complemento": f_comp, "bairro": f_ba, "cidade": f_cid, "uf": f_uf.upper()}
+                        ficha = {
+                            "cpf": f_cpf, "nome": f_nome.upper(), "data_nascimento": f_nasc.isoformat(),
+                            "telefone": f_tel, "convenio": f_conv.upper(), "email": f_email.lower(),
+                            "cep": f_cep, "rua": f_rua, "numero": f_num, "complemento": f_comp,
+                            "bairro": f_ba, "cidade": f_cid, "uf": f_uf.upper()
+                        }
                         supabase.table("PACIENTES").upsert(ficha).execute()
-                        
-                        # Salva na Fila do Médico (ATENDIMENTOS)
-                        med_n = "A DEFINIR"
-                        if p_sel != "-- Selecione --": med_n = df_unidade[df_unidade['display'] == p_sel].iloc[0]['MEDICOS']['nome']
-                        
-                        atend = {"paciente": f_nome.upper(), "cpf": f_cpf, "unidade": u_trabalho, "medico": med_n, "triagem": f"NASC: {f_nasc.strftime('%d/%m/%Y')} | TEL: {f_tel}", "status": "Aguardando"}
-                        supabase.table("ATENDIMENTOS").insert(atend).execute()
-                        
-                        st.success("✅ Check-in realizado!")
+                        st.success("✅ Cadastro salvo com sucesso!")
                         st.rerun()
-                    except Exception as e: st.error(f"Erro: {e}")
-
+                    except Exception as e:
+                        st.error(f"Erro ao salvar: {e}")
