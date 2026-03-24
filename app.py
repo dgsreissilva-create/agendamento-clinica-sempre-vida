@@ -840,76 +840,79 @@ if navegador == "9. Gestão de Especialidades":
 
 
 
+# ==========================================================
+# TELA 10: CADASTRO ÚNICO DE PACIENTES (VERSÃO CORRIGIDA)
+# ==========================================================
+elif menu == "10. Cadastro de Pacientes": # <-- Verifique se o nome no sidebar é IGUAL a este
+    st.header("🧾 Cadastro Único de Pacientes")
+    st.caption("Digite o CPF para carregar um cadastro existente ou criar um novo.")
 
-# =========================================================
-# TELA 10 - CADASTRO DE PACIENTES (VERSÃO ESTÁVEL)
-# =========================================================
+    # 1. CAMPO DE BUSCA (FORA DO FORMULÁRIO PARA FUNCIONAR O AUTO-PREENCHIMENTO)
+    cpf_busca = st.text_input("🔍 Buscar por CPF para carregar dados:")
 
-elif menu == "10. Cadastro de Pacientes":
+    # Lógica de Busca no Supabase
+    dados_c = {}
+    if cpf_busca:
+        try:
+            res_p = supabase.table("PACIENTES").select("*").eq("cpf", cpf_busca).execute()
+            if res_p.data:
+                dados_c = res_p.data[0]
+                st.success("✅ Cadastro localizado! Os campos abaixo foram preenchidos.")
+        except:
+            pass
 
-    st.header("🧾 Cadastro de Pacientes")
-
-    with st.form("form_paciente_cadastro"):
-
+    # 2. FORMULÁRIO DE CADASTRO
+    with st.form("form_paciente_cadastro", clear_on_submit=False):
         st.subheader("👤 Dados Pessoais")
-
         c1, c2 = st.columns(2)
 
-        nome = c1.text_input("Nome Completo *")
-        cpf = c2.text_input("CPF *")
+        # Preenche o valor se encontrar no banco, senão deixa vazio
+        f_nome = c1.text_input("Nome Completo *", value=dados_c.get('nome', ""))
+        f_cpf = c2.text_input("CPF *", value=cpf_busca if cpf_busca else dados_c.get('cpf', ""))
 
-        data_nascimento = c1.date_input("Data de Nascimento")
-        telefone = c2.text_input("Telefone")
+        # Correção da Data (Intervalo Amplo)
+        v_nasc = pd.to_datetime(dados_c.get('data_nascimento')).date() if dados_c.get('data_nascimento') else dt_lib.date(1990, 1, 1)
+        f_nasc = c1.date_input("Data de Nascimento", value=v_nasc, min_value=dt_lib.date(1900,1,1), format="DD/MM/YYYY")
+        f_tel = c2.text_input("Telefone", value=dados_c.get('telefone', ""))
 
-        convenio = c1.text_input("Convênio")
-        email = c2.text_input("Email")
+        f_conv = c1.text_input("Convênio", value=dados_c.get('convenio', "PARTICULAR"))
+        f_email = c2.text_input("Email", value=dados_c.get('email', ""))
 
         st.subheader("🏠 Endereço")
-
         c3, c4 = st.columns(2)
 
-        cep = c3.text_input("CEP")
-        rua = c4.text_input("Rua")
-
-        numero = c3.text_input("Número")
-        complemento = c4.text_input("Complemento")
-
-        bairro = c3.text_input("Bairro")
-        cidade = c4.text_input("Cidade")
-
-        uf = c3.text_input("UF")
+        f_cep = c3.text_input("CEP", value=dados_c.get('cep', ""))
+        f_rua = c4.text_input("Rua", value=dados_c.get('rua', ""))
+        f_num = c3.text_input("Número", value=dados_c.get('numero', ""))
+        f_comp = c4.text_input("Complemento", value=dados_c.get('complemento', ""))
+        f_bairro = c3.text_input("Bairro", value=dados_c.get('bairro', ""))
+        f_cid = c4.text_input("Cidade", value=dados_c.get('cidade', "Belo Horizonte"))
+        f_uf = c3.text_input("UF", value=dados_c.get('uf', "MG"), max_chars=2)
 
         submit = st.form_submit_button("💾 Salvar Cadastro")
 
         if submit:
-
-            if not nome or not cpf:
+            if not f_nome or not f_cpf:
                 st.warning("⚠️ Nome e CPF são obrigatórios.")
             else:
                 try:
-                    supabase.table("PACIENTES").upsert({
-                        "cpf": cpf,
-                        "nome": nome,
-                        "data_nascimento": data_nascimento.isoformat() if data_nascimento else None,
-                        "telefone": telefone,
-                        "convenio": convenio,
-                        "email": email,
-                        "cep": cep,
-                        "rua": rua,
-                        "numero": numero,
-                        "complemento": complemento,
-                        "bairro": bairro,
-                        "cidade": cidade,
-                        "uf": uf
-                    }).execute()
-
-                    st.success("✅ Paciente cadastrado/atualizado com sucesso!")
-
-                    # 🔥 rerun seguro (evita tela branca em versões antigas)
-                    try:
-                        st.rerun()
-                    except:
-                        pass
-
+                    payload = {
+                        "cpf": f_cpf,
+                        "nome": f_nome.upper(),
+                        "data_nascimento": f_nasc.isoformat(),
+                        "telefone": f_tel,
+                        "convenio": f_conv.upper(),
+                        "email": f_email.lower(),
+                        "cep": f_cep,
+                        "rua": f_rua,
+                        "numero": f_num,
+                        "complemento": f_comp,
+                        "bairro": f_bairro,
+                        "cidade": f_cid,
+                        "uf": f_uf.upper()
+                    }
+                    supabase.table("PACIENTES").upsert(payload).execute()
+                    st.success("✅ Paciente salvo com sucesso!")
+                    st.balloons()
                 except Exception as e:
                     st.error(f"❌ Erro ao salvar: {e}")
