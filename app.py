@@ -902,66 +902,86 @@ elif menu == "10. Recepção e Triagem":
                 )
                 lista_pacientes_unidade = sorted(df_unidade['display'].tolist())
 
-        # ==========================================================
-        # 3. BUSCA (CPF OU DATA NASCIMENTO)
-        # ==========================================================
-        col1, col2, col3 = st.columns(3)
 
-        with col1:
-            paciente_agendado = st.selectbox(
-                f"👥 Pacientes de Hoje ({u_trabalho})",
-                ["-- Selecione --"] + lista_pacientes_unidade
+
+# ==========================================================
+# 3. BUSCA (CPF OU DATA NASCIMENTO - AJUSTE FINAL)
+# ==========================================================
+
+col1, col2, col3 = st.columns(3)
+
+with col1:
+    paciente_agendado = st.selectbox(
+        f"👥 Pacientes de Hoje ({u_trabalho})",
+        ["-- Selecione --"] + lista_pacientes_unidade
+    )
+
+with col2:
+    cpf_busca = st.text_input("🔍 CPF")
+
+with col3:
+    data_busca = st.date_input(
+        "📅 Nascimento",
+        value=None,
+        format="DD/MM/YYYY"
+    )
+
+dados_carregados = {}
+
+try:
+
+    # 🔒 PRIORIDADE TOTAL PARA CPF
+    if cpf_busca and cpf_busca.strip() != "":
+
+        res_p = supabase.table("pacientes")\
+            .select("*")\
+            .eq("cpf", cpf_busca.strip())\
+            .execute()
+
+        if res_p.data:
+            dados_carregados = res_p.data[0]
+            st.success("✅ Dados carregados pelo CPF")
+        else:
+            st.warning("⚠️ CPF não encontrado")
+
+    # 🔍 DATA NASCIMENTO (SOMENTE SE CPF VAZIO)
+    elif data_busca:
+
+        res_p = supabase.table("pacientes")\
+            .select("*")\
+            .eq("data_nascimento", data_busca.isoformat())\
+            .execute()
+
+        if res_p.data:
+
+            df_p = pd.DataFrame(res_p.data)
+
+            # melhora exibição (nome + telefone)
+            df_p['display'] = (
+                df_p['nome'].fillna('SEM NOME') + 
+                " | " + 
+                df_p['telefone'].fillna('')
             )
 
-        with col2:
-            cpf_busca = st.text_input("🔍 CPF")
-
-        with col3:
-            data_busca = st.date_input(
-                "📅 Nascimento",
-                value=None,
-                format="DD/MM/YYYY"
+            paciente_sel = st.selectbox(
+                "👤 Pacientes encontrados",
+                ["Selecione"] + df_p['display'].tolist()
             )
 
-        dados_carregados = {}
+            if paciente_sel != "Selecione":
+                dados_carregados = df_p[
+                    df_p['display'] == paciente_sel
+                ].iloc[0].to_dict()
 
-        try:
-            if cpf_busca:
+                st.success("✅ Dados carregados pela data de nascimento")
 
-                res_p = supabase.table("pacientes")\
-                    .select("*")\
-                    .eq("cpf", cpf_busca)\
-                    .execute()
+        else:
+            st.warning("⚠️ Nenhum paciente encontrado nesta data")
 
-                if res_p.data:
-                    dados_carregados = res_p.data[0]
-                    st.success("✅ Dados carregados pelo CPF")
+except Exception as e:
+    st.error(f"Erro ao buscar: {e}")
 
-            elif data_busca:
-
-                res_p = supabase.table("pacientes")\
-                    .select("*")\
-                    .eq("data_nascimento", data_busca.isoformat())\
-                    .execute()
-
-                if res_p.data:
-                    df_p = pd.DataFrame(res_p.data)
-                    df_p['display'] = df_p['nome'].fillna('SEM NOME')
-
-                    escolha = st.selectbox(
-                        "👤 Pacientes encontrados",
-                        ["Selecione"] + df_p['display'].tolist()
-                    )
-
-                    if escolha != "Selecione":
-                        dados_carregados = df_p[df_p['display'] == escolha].iloc[0].to_dict()
-                        st.success("✅ Dados carregados pela data")
-
-        except Exception as e:
-            st.error(f"Erro ao buscar: {e}")
-
-        st.markdown("---")
-
+        
         # ==========================================================
         # 4. FORMULÁRIO
         # ==========================================================
