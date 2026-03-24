@@ -905,9 +905,27 @@ if menu == "10. Recepção e Triagem":
             f_cpf = c2.text_input("CPF (ID Único)", value=cpf_busca if cpf_busca else dados_carregados.get('cpf', ""))
             
             # --- AJUSTE: DATA DE NASCIMENTO FORMATO BRASIL ---
-            val_nasc_base = pd.to_datetime(dados_carregados.get('data_nascimento')).date() if dados_carregados.get('data_nascimento') else dt_lib.date(1990, 1, 1)
-            f_nasc = c3.date_input("Data de Nascimento", value=val_nasc_base, format="DD/MM/YYYY")
+# 🔒 Tratamento seguro da data
+if dados_carregados.get('data_nascimento'):
+    try:
+        val_nasc_base = pd.to_datetime(dados_carregados.get('data_nascimento')).date()
+    except:
+        val_nasc_base = dt_lib.date(2000, 1, 1)
+else:
+    val_nasc_base = dt_lib.date(2000, 1, 1)
 
+# ✅ Permite datas desde 1900
+f_nasc = c3.date_input(
+    "Data de Nascimento",
+    value=val_nasc_base,
+    min_value=dt_lib.date(1900, 1, 1),
+    max_value=dt_lib.date.today(),
+    format="DD/MM/YYYY"
+)
+
+
+
+            
             c4, c5, c6 = st.columns(3)
             f_tel = c4.text_input("Telefone/WhatsApp", value=dados_carregados.get('telefone', ""))
             f_conv = c5.text_input("Convênio", value=dados_carregados.get('convenio', "PARTICULAR"))
