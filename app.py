@@ -846,10 +846,8 @@ if navegador == "9. Gestão de Especialidades":
 
 
 
-
-
 # ==========================================================
-# TELA 10: RECEPÇÃO (VERSÃO FINAL AJUSTADA BR)
+# TELA 10: RECEPÇÃO (VERSÃO FINAL - ESTÁVEL)
 # ==========================================================
 
 elif menu == "10. Recepção e Triagem":
@@ -877,10 +875,10 @@ elif menu == "10. Recepção e Triagem":
         # ==========================================================
         hoje = dt_lib.datetime.now().date().isoformat()
 
-        res_agenda = supabase.table("CONSULTAS")\
-            .select("*, MEDICOS(nome, unidade)")\
-            .eq("status", "Marcada")\
-            .gte("data_hora", hoje)\
+        res_agenda = supabase.table("CONSULTAS") \
+            .select("*, MEDICOS(nome, unidade)") \
+            .eq("status", "Marcada") \
+            .gte("data_hora", hoje) \
             .execute()
 
         lista_pacientes_unidade = []
@@ -902,92 +900,85 @@ elif menu == "10. Recepção e Triagem":
                 )
                 lista_pacientes_unidade = sorted(df_unidade['display'].tolist())
 
+        # ==========================================================
+        # 3. BUSCA (CPF OU DATA NASCIMENTO)
+        # ==========================================================
+        col1, col2, col3 = st.columns(3)
 
-
-# ==========================================================
-# 3. BUSCA (CPF OU DATA NASCIMENTO - AJUSTE FINAL)
-# ==========================================================
-
-col1, col2, col3 = st.columns(3)
-
-with col1:
-    paciente_agendado = st.selectbox(
-        f"👥 Pacientes de Hoje ({u_trabalho})",
-        ["-- Selecione --"] + lista_pacientes_unidade
-    )
-
-with col2:
-    cpf_busca = st.text_input("🔍 CPF")
-
-with col3:
-    data_busca = st.date_input(
-        "📅 Nascimento",
-        value=None,
-        format="DD/MM/YYYY"
-    )
-
-dados_carregados = {}
-
-try:
-
-    # 🔒 PRIORIDADE TOTAL PARA CPF
-    if cpf_busca and cpf_busca.strip() != "":
-
-        res_p = supabase.table("pacientes")\
-            .select("*")\
-            .eq("cpf", cpf_busca.strip())\
-            .execute()
-
-        if res_p.data:
-            dados_carregados = res_p.data[0]
-            st.success("✅ Dados carregados pelo CPF")
-        else:
-            st.warning("⚠️ CPF não encontrado")
-
-    # 🔍 DATA NASCIMENTO (SOMENTE SE CPF VAZIO)
-    elif data_busca:
-
-        res_p = supabase.table("pacientes")\
-            .select("*")\
-            .eq("data_nascimento", data_busca.isoformat())\
-            .execute()
-
-        if res_p.data:
-
-            df_p = pd.DataFrame(res_p.data)
-
-            # melhora exibição (nome + telefone)
-            df_p['display'] = (
-                df_p['nome'].fillna('SEM NOME') + 
-                " | " + 
-                df_p['telefone'].fillna('')
+        with col1:
+            paciente_agendado = st.selectbox(
+                f"👥 Pacientes de Hoje ({u_trabalho})",
+                ["-- Selecione --"] + lista_pacientes_unidade
             )
 
-            paciente_sel = st.selectbox(
-                "👤 Pacientes encontrados",
-                ["Selecione"] + df_p['display'].tolist()
+        with col2:
+            cpf_busca = st.text_input("🔍 CPF")
+
+        with col3:
+            data_busca = st.date_input(
+                "📅 Nascimento",
+                value=None,
+                format="DD/MM/YYYY"
             )
 
-            if paciente_sel != "Selecione":
-                dados_carregados = df_p[
-                    df_p['display'] == paciente_sel
-                ].iloc[0].to_dict()
+        dados_carregados = {}
 
-                st.success("✅ Dados carregados pela data de nascimento")
+        try:
 
-        else:
-            st.warning("⚠️ Nenhum paciente encontrado nesta data")
+            if cpf_busca and cpf_busca.strip() != "":
 
-except Exception as e:
-    st.error(f"Erro ao buscar: {e}")
+                res_p = supabase.table("pacientes") \
+                    .select("*") \
+                    .eq("cpf", cpf_busca.strip()) \
+                    .execute()
 
-        
+                if res_p.data:
+                    dados_carregados = res_p.data[0]
+                    st.success("✅ Dados carregados pelo CPF")
+                else:
+                    st.warning("⚠️ CPF não encontrado")
+
+            elif data_busca:
+
+                res_p = supabase.table("pacientes") \
+                    .select("*") \
+                    .eq("data_nascimento", data_busca.isoformat()) \
+                    .execute()
+
+                if res_p.data:
+                    df_p = pd.DataFrame(res_p.data)
+
+                    df_p['display'] = (
+                        df_p['nome'].fillna('SEM NOME') + " | " +
+                        df_p['telefone'].fillna('')
+                    )
+
+                    paciente_sel = st.selectbox(
+                        "👤 Pacientes encontrados",
+                        ["Selecione"] + df_p['display'].tolist()
+                    )
+
+                    if paciente_sel != "Selecione":
+                        dados_carregados = df_p[
+                            df_p['display'] == paciente_sel
+                        ].iloc[0].to_dict()
+
+                        st.success("✅ Dados carregados pela data de nascimento")
+
+                else:
+                    st.warning("⚠️ Nenhum paciente encontrado nesta data")
+
+        except Exception as e:
+            st.error(f"Erro ao buscar: {e}")
+
+        st.markdown("---")
+
         # ==========================================================
         # 4. FORMULÁRIO
         # ==========================================================
         with st.form("form_checkin"):
 
-            c1, c2, c3 = st.columns([3,2,2])
+            c1, c2, c3 = st.columns([3, 2, 2])
 
             f_nome = c1.text_input(
                 "Nome",
@@ -999,19 +990,18 @@ except Exception as e:
 
             f_cpf = c2.text_input(
                 "CPF (opcional)",
-                value=cpf_busca if cpf_busca else dados_carregados.get("cpf","")
+                value=cpf_busca if cpf_busca else dados_carregados.get("cpf", "")
             )
 
-            # DATA EM FORMATO BR
             if dados_carregados.get("data_nascimento"):
                 try:
                     data_padrao = pd.to_datetime(
                         dados_carregados.get("data_nascimento")
                     ).date()
                 except:
-                    data_padrao = dt_lib.date(2000,1,1)
+                    data_padrao = dt_lib.date(2000, 1, 1)
             else:
-                data_padrao = dt_lib.date(2000,1,1)
+                data_padrao = dt_lib.date(2000, 1, 1)
 
             f_nasc = c3.date_input(
                 "Nascimento",
@@ -1021,27 +1011,24 @@ except Exception as e:
 
             c4, c5, c6 = st.columns(3)
 
-            f_tel = c4.text_input("Telefone", value=dados_carregados.get("telefone",""))
-            f_conv = c5.text_input("Convênio", value=dados_carregados.get("convenio","PARTICULAR"))
-            f_email = c6.text_input("Email", value=dados_carregados.get("email",""))
+            f_tel = c4.text_input("Telefone", value=dados_carregados.get("telefone", ""))
+            f_conv = c5.text_input("Convênio", value=dados_carregados.get("convenio", "PARTICULAR"))
+            f_email = c6.text_input("Email", value=dados_carregados.get("email", ""))
 
             st.subheader("Endereço")
 
-            # LINHA AJUSTADA (CEP + RUA)
-            ce1, ce2 = st.columns([1,4])
-            f_cep = ce1.text_input("CEP", value=dados_carregados.get("cep",""))
-            f_rua = ce2.text_input("Rua", value=dados_carregados.get("rua",""))
+            ce1, ce2 = st.columns([1, 4])
+            f_cep = ce1.text_input("CEP", value=dados_carregados.get("cep", ""))
+            f_rua = ce2.text_input("Rua", value=dados_carregados.get("rua", ""))
 
-            # LINHA AJUSTADA (NUMERO + COMPLEMENTO)
-            ce3, ce4 = st.columns([1,3])
-            f_num = ce3.text_input("Número", value=dados_carregados.get("numero",""))
-            f_comp = ce4.text_input("Complemento", value=dados_carregados.get("complemento",""))
+            ce3, ce4 = st.columns([1, 3])
+            f_num = ce3.text_input("Número", value=dados_carregados.get("numero", ""))
+            f_comp = ce4.text_input("Complemento", value=dados_carregados.get("complemento", ""))
 
-            # LINHA FINAL
-            ce5, ce6, ce7 = st.columns([2,2,1])
-            f_bairro = ce5.text_input("Bairro", value=dados_carregados.get("bairro",""))
-            f_cid = ce6.text_input("Cidade", value=dados_carregados.get("cidade","Belo Horizonte"))
-            f_uf = ce7.text_input("UF", value=dados_carregados.get("uf","MG"))
+            ce5, ce6, ce7 = st.columns([2, 2, 1])
+            f_bairro = ce5.text_input("Bairro", value=dados_carregados.get("bairro", ""))
+            f_cid = ce6.text_input("Cidade", value=dados_carregados.get("cidade", "Belo Horizonte"))
+            f_uf = ce7.text_input("UF", value=dados_carregados.get("uf", "MG"))
 
             # ==========================================================
             # 5. SALVAR
@@ -1098,7 +1085,6 @@ except Exception as e:
 
                     except Exception as e:
                         st.error(f"Erro: {e}")
-
 
 
 
