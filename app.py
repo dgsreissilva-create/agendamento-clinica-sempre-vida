@@ -38,7 +38,8 @@ menu = st.sidebar.radio("Navegação", [
     "6. Excluir Grade Aberta",
     "7. Excluir Cadastro de Médico",
     "8. Relatório Gerencial",
-    "9. Gestão de Especialidades"
+    "9. Gestão de Especialidades",
+    "10. Cadastro de Pacientes"
   
     
 ], index=2)
@@ -839,7 +840,73 @@ if navegador == "9. Gestão de Especialidades":
         st.caption("IA.na.Empresa - Gestão de Unidades e Especialidades")
 
 
+# =========================================================
+# TELA 10 - CADASTRO DE PACIENTES
+# =========================================================
 
+elif menu == "10. Cadastro de Pacientes":
+
+    st.header("🧾 Cadastro de Pacientes")
+
+    with st.form("form_paciente_cadastro"):
+
+        st.subheader("👤 Dados Pessoais")
+
+        c1, c2 = st.columns(2)
+
+        nome = c1.text_input("Nome Completo *")
+        cpf = c2.text_input("CPF *")
+
+        data_nascimento = c1.date_input("Data de Nascimento", format="DD/MM/YYYY")
+        telefone = c2.text_input("Telefone")
+
+        convenio = c1.text_input("Convênio")
+        email = c2.text_input("Email")
+
+        st.subheader("🏠 Endereço")
+
+        c3, c4 = st.columns(2)
+
+        cep = c3.text_input("CEP")
+        rua = c4.text_input("Rua")
+
+        numero = c3.text_input("Número")
+        complemento = c4.text_input("Complemento")
+
+        bairro = c3.text_input("Bairro")
+        cidade = c4.text_input("Cidade")
+
+        uf = c3.text_input("UF")
+
+        submit = st.form_submit_button("💾 Salvar Cadastro")
+
+        if submit:
+
+            if not nome or not cpf:
+                st.warning("⚠️ Nome e CPF são obrigatórios.")
+            else:
+                try:
+                    supabase.table("PACIENTES").upsert({
+                        "cpf": cpf,
+                        "nome": nome,
+                        "data_nascimento": str(data_nascimento) if data_nascimento else None,
+                        "telefone": telefone,
+                        "convenio": convenio,
+                        "email": email,
+                        "cep": cep,
+                        "rua": rua,
+                        "numero": numero,
+                        "complemento": complemento,
+                        "bairro": bairro,
+                        "cidade": cidade,
+                        "uf": uf
+                    }).execute()
+
+                    st.success("✅ Paciente cadastrado/atualizado com sucesso!")
+                    st.rerun()
+
+                except Exception as e:
+                    st.error(f"❌ Erro ao salvar: {e}")
 
 
 
