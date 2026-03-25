@@ -845,9 +845,8 @@ if navegador == "9. Gestão de Especialidades":
 
 
 
-
 # ==========================================================
-# TELA 10: RECEPÇÃO (VERSÃO FINAL - ESTÁVEL)
+# TELA 10: RECEPÇÃO E TRIAGEM (VERSÃO FINAL CORRIGIDA)
 # ==========================================================
 
 elif menu == "10. Recepção e Triagem":
@@ -901,14 +900,10 @@ elif menu == "10. Recepção e Triagem":
                     df_unidade['paciente_sobrenome'].fillna('').str.upper()
                 )
 
-                lista_pacientes_unidade = sorted(
-                    df_unidade['display'].tolist()
-                )
+                lista_pacientes_unidade = sorted(df_unidade['display'].tolist())
 
-
-
-# ==========================================================
-        # 3. BUSCA (CPF OU DATA NASCIMENTO)
+        # ==========================================================
+        # 3. BUSCA (CPF OU DATA)
         # ==========================================================
         col1, col2, col3 = st.columns(3)
 
@@ -922,9 +917,14 @@ elif menu == "10. Recepção e Triagem":
             cpf_busca = st.text_input("🔍 CPF")
 
         with col3:
+            usar_data = st.checkbox("Buscar por Data")
+
+        data_busca = None
+
+        if usar_data:
             data_busca = st.date_input(
                 "📅 Nascimento",
-                value=None,
+                value=dt_lib.date(2000, 1, 1),
                 format="DD/MM/YYYY"
             )
 
@@ -932,7 +932,7 @@ elif menu == "10. Recepção e Triagem":
 
         try:
 
-            # ---------------- CPF ----------------
+            # ===== CPF =====
             if cpf_busca and cpf_busca.strip() != "":
 
                 res_p = supabase.table("pacientes") \
@@ -946,8 +946,8 @@ elif menu == "10. Recepção e Triagem":
                 else:
                     st.warning("⚠️ CPF não encontrado")
 
-            # ---------------- DATA NASCIMENTO ----------------
-            elif data_busca:
+            # ===== DATA =====
+            elif usar_data and data_busca:
 
                 data_inicio = data_busca.isoformat() + "T00:00:00"
                 data_fim = data_busca.isoformat() + "T23:59:59"
@@ -973,12 +973,11 @@ elif menu == "10. Recepção e Triagem":
                     )
 
                     if paciente_sel != "Selecione":
-
                         dados_carregados = df_p[
                             df_p['display'] == paciente_sel
                         ].iloc[0].to_dict()
 
-                        st.success("✅ Dados carregados pela data de nascimento")
+                        st.success("✅ Dados carregados pela data")
 
                 else:
                     st.warning("⚠️ Nenhum paciente encontrado nesta data")
@@ -986,13 +985,11 @@ elif menu == "10. Recepção e Triagem":
         except Exception as e:
             st.error(f"Erro ao buscar: {e}")
 
-        st.markdown("---")
-        
-
-        
         # ==========================================================
         # 4. FORMULÁRIO
         # ==========================================================
+        st.markdown("---")
+
         with st.form("form_checkin"):
 
             c1, c2, c3 = st.columns([3, 2, 2])
@@ -1047,9 +1044,6 @@ elif menu == "10. Recepção e Triagem":
             f_cid = ce6.text_input("Cidade", value=dados_carregados.get("cidade", "Belo Horizonte"))
             f_uf = ce7.text_input("UF", value=dados_carregados.get("uf", "MG"))
 
-            # ==========================================================
-            # 5. SALVAR
-            # ==========================================================
             if st.form_submit_button("🚀 Finalizar Check-in"):
 
                 if not f_nome:
@@ -1078,19 +1072,12 @@ elif menu == "10. Recepção e Triagem":
 
                         supabase.table("pacientes").upsert(ficha).execute()
 
-                        medico_nome = "A DEFINIR"
-
-                        if paciente_agendado != "-- Selecione --" and not df_unidade.empty:
-                            medico_nome = df_unidade[
-                                df_unidade['display'] == paciente_agendado
-                            ].iloc[0]['MEDICOS']['nome']
-
                         atend = {
                             "paciente": f_nome.upper(),
                             "cpf": f_cpf,
                             "status": "Aguardando",
                             "unidade": u_trabalho,
-                            "medico": medico_nome,
+                            "medico": "A DEFINIR",
                             "triagem": f"NASC: {f_nasc.strftime('%d/%m/%Y')} | TEL: {f_tel}",
                             "data_hora": dt_lib.datetime.now().isoformat()
                         }
@@ -1102,8 +1089,6 @@ elif menu == "10. Recepção e Triagem":
 
                     except Exception as e:
                         st.error(f"❌ Erro: {e}")
-
-
 
 
 # ==========================================================
