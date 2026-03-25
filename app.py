@@ -1100,9 +1100,8 @@ elif menu == "10. Recepção e Triagem":
 
 
 
-
 # ==========================================================
-# TELA: PRONTUÁRIO MÉDICO (ATENDIMENTO) - FINAL COMPLETA
+# TELA: PRONTUÁRIO MÉDICO (ATENDIMENTO) - FINAL AJUSTADA
 # ==========================================================
 if menu == "11. Prontuário Médico":
     if verificar_senha():
@@ -1111,15 +1110,12 @@ if menu == "11. Prontuário Médico":
         st.caption("Padrão de Registro Clínico - Conselho Federal de Medicina")
         st.markdown("---")
 
-        # ==========================================================
-        # 🔔 MENSAGEM PÓS-SALVAMENTO
-        # ==========================================================
         if "msg_prontuario" in st.session_state:
             st.success(st.session_state["msg_prontuario"])
             del st.session_state["msg_prontuario"]
 
         # ==========================================================
-        # 1. BUSCA PACIENTES AGUARDANDO
+        # BUSCAR PACIENTES
         # ==========================================================
         try:
             res_fila = supabase.table("atendimentos")\
@@ -1133,42 +1129,63 @@ if menu == "11. Prontuário Médico":
             st.error(f"Erro ao carregar fila: {e}")
             pacientes_espera = []
 
-        # ==========================================================
-        # 2. LISTA DE PACIENTES
-        # ==========================================================
         if not pacientes_espera:
             st.info("ℹ️ Não há pacientes aguardando atendimento no momento.")
         else:
+
+            nomes_fila = [p.get('paciente', 'SEM NOME') for p in pacientes_espera]
+
+            p_escolhido = st.selectbox(
+                "Selecione o Paciente",
+                nomes_fila
+            )
+
+            dados_atend = next(
+                item for item in pacientes_espera
+                if item.get('paciente') == p_escolhido
+            )
+
+            # ==========================================================
+            # 🔥 SELEÇÃO OBRIGATÓRIA (UNIDADE E MÉDICO)
+            # ==========================================================
+
+            # Lista de unidades (pode evoluir depois para tabela)
+            unidades = [
+                "Selecione...",
+                "Pç 7 Rua Carijos 424 SL 2213",
+                "Pç 7 Rua Rio de Janeiro 462 SL 303",
+                "Eldorado Av Jose Faria da Rocha 4408 2 and",
+                "Eldorado Av Jose Faria da Rocha 5959"
+            ]
+
+            # Buscar médicos do banco
             try:
-                nomes_fila = [
-                    p.get('paciente', 'SEM NOME')
-                    for p in pacientes_espera
-                ]
+                res_med = supabase.table("MEDICOS")\
+                    .select("nome")\
+                    .execute()
 
-                p_escolhido = st.selectbox(
-                    "Selecione o Paciente para Iniciar Atendimento",
-                    nomes_fila
-                )
+                lista_medicos = ["Selecione..."] + [
+                    m["nome"] for m in res_med.data
+                ] if res_med.data else ["Selecione..."]
 
-                dados_atend = next(
-                    item for item in pacientes_espera
-                    if item.get('paciente') == p_escolhido
-                )
+            except:
+                lista_medicos = ["Selecione..."]
 
-            except Exception as e:
-                st.error(f"Erro ao processar fila: {e}")
-                st.stop()
+            col1, col2 = st.columns(2)
 
-            # ==========================================================
-            # 🔥 IDENTIFICAÇÃO AUTOMÁTICA
-            # ==========================================================
-            unidade_atual = dados_atend.get("unidade", "NÃO INFORMADO")
-            medico_atual = dados_atend.get("medico", "NÃO DEFINIDO")
+            unidade_atual = col1.selectbox(
+                "🏥 Unidade",
+                unidades,
+                index=unidades.index(dados_atend.get("unidade")) 
+                if dados_atend.get("unidade") in unidades else 0
+            )
 
-            st.success(f"""
-🏥 Unidade: {unidade_atual}  
-👨‍⚕️ Médico: {medico_atual}
-""")
+            medico_atual = col2.selectbox(
+                "👨‍⚕️ Médico",
+                lista_medicos,
+                index=lista_medicos.index(dados_atend.get("medico")) 
+                if dados_atend.get("medico") in lista_medicos else 0
+            )
 
             # ==========================================================
             # TRIAGEM
@@ -1179,7 +1196,7 @@ if menu == "11. Prontuário Médico":
             st.markdown("---")
 
             # ==========================================================
-            # 📖 CONSULTAR PRONTUÁRIO ANTERIOR
+            # CONSULTAR PRONTUÁRIO
             # ==========================================================
             if st.button("📖 Consultar Prontuário"):
 
@@ -1192,21 +1209,15 @@ if menu == "11. Prontuário Médico":
                         .limit(5)\
                         .execute()
 
-                    historico = res_hist.data if res_hist.data else []
-
-                    if historico:
+                    if res_hist.data:
                         st.subheader("📚 Últimos Prontuários")
 
-                        for h in historico:
+                        for h in res_hist.data:
                             data_formatada = pd.to_datetime(
                                 h.get("data_hora")
                             ).strftime("%d/%m/%Y %H:%M")
 
-                            st.info(f"""
-🗓️ {data_formatada}
-
-{h.get('prontuario_texto', 'Sem registro')}
-                            """)
+                            st.info(f"{data_formatada}\n\n{h.get('prontuario_texto','')}")
                     else:
                         st.warning("Nenhum prontuário anterior encontrado.")
 
@@ -1216,39 +1227,25 @@ if menu == "11. Prontuário Médico":
             st.markdown("---")
 
             # ==========================================================
-            # FORMULÁRIO MÉDICO
+            # FORMULÁRIO
             # ==========================================================
             with st.form("form_prontuario"):
 
-                st.subheader("Registro Clínico")
+                p_historico = st.text_area("Histórico", height=150)
+                p_diagnostico = st.text_area("Diagnóstico", height=150)
+                p_tratamento = st.text_area("Tratamento", height=150)
 
-                p_historico = st.text_area(
-                    "1. Histórico (Anamnese e Queixas)",
-                    height=150
-                )
+                if st.form_submit_button("Finalizar Atendimento"):
 
-                p_diagnostico = st.text_area(
-                    "2. Diagnóstico (Exame Físico e Hipóteses)",
-                    height=150
-                )
-
-                p_tratamento = st.text_area(
-                    "3. Tratamento (Conduta e Prescrição)",
-                    height=150
-                )
-
-                # ==========================================================
-                # FINALIZAR ATENDIMENTO
-                # ==========================================================
-                if st.form_submit_button("Finalizar Atendimento e Assinar"):
-
-                    if not p_historico or not p_tratamento:
+                    # 🚨 VALIDAÇÃO OBRIGATÓRIA
+                    if unidade_atual == "Selecione..." or medico_atual == "Selecione...":
+                        st.error("⚠️ Unidade e Médico são obrigatórios.")
+                    elif not p_historico or not p_tratamento:
                         st.error("⚠️ Histórico e Tratamento são obrigatórios.")
                     else:
                         try:
 
                             agora = dt_lib.datetime.now()
-
                             data_br = agora.strftime("%d/%m/%Y")
                             hora_br = agora.strftime("%H:%M")
 
@@ -1273,10 +1270,8 @@ if menu == "11. Prontuário Médico":
 
                             st.session_state["msg_prontuario"] = "Informações salvas no prontuário"
 
-                            st.success(f"✅ Atendimento de {p_escolhido} finalizado com sucesso.")
-                            st.balloons()
-
+                            st.success("✅ Atendimento finalizado com sucesso")
                             st.rerun()
 
                         except Exception as e:
-                            st.error(f"❌ Erro ao salvar prontuário: {e}")
+                            st.error(f"Erro: {e}")
