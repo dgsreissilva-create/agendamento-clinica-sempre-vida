@@ -841,6 +841,7 @@ if navegador == "9. Gestão de Especialidades":
         st.caption("IA.na.Empresa - Gestão de Unidades e Especialidades")
 
 
+
 # ==========================================================
 # TELA 10: RECEPÇÃO E TRIAGEM (VERSÃO FINAL PROFISSIONAL)
 # ==========================================================
@@ -854,7 +855,7 @@ elif menu == "10. Recepção e Triagem":
         st.markdown("---")
 
         # ==========================================================
-        # 🔔 MENSAGEM PÓS-SALVAMENTO (ABAIXO DO BOTÃO)
+        # 🔔 MENSAGEM PÓS-SALVAMENTO
         # ==========================================================
         if "msg_checkin" in st.session_state:
             st.success(st.session_state["msg_checkin"])
@@ -870,40 +871,44 @@ elif menu == "10. Recepção e Triagem":
             "Eldorado Av Jose Faria da Rocha 5959"
         ]
 
-        u_trabalho = st.selectbox("📍 Unidade:", unidades_disiveis)
+        u_trabalho = st.selectbox("📍 Unidade:", unidades_disponiveis)
 
         # ==========================================================
         # 2. AGENDA
         # ==========================================================
         hoje = dt_lib.datetime.now().date().isoformat()
 
-        res_agenda = supabase.table("CONSULTAS") \
-            .select("*, MEDICOS(nome, unidade)") \
-            .eq("status", "Marcada") \
-            .gte("data_hora", hoje) \
-            .execute()
-
         lista_pacientes_unidade = []
         df_unidade = pd.DataFrame()
 
-        if res_agenda.data:
+        try:
+            res_agenda = supabase.table("CONSULTAS") \
+                .select("*, MEDICOS(nome, unidade)") \
+                .eq("status", "Marcada") \
+                .gte("data_hora", hoje) \
+                .execute()
 
-            df_ag = pd.DataFrame(res_agenda.data)
+            if res_agenda.data:
 
-            df_unidade = df_ag[
-                df_ag['MEDICOS'].apply(
-                    lambda x: isinstance(x, dict) and x.get('unidade') == u_trabalho
-                )
-            ].copy()
+                df_ag = pd.DataFrame(res_agenda.data)
 
-            if not df_unidade.empty:
+                df_unidade = df_ag[
+                    df_ag['MEDICOS'].apply(
+                        lambda x: isinstance(x, dict) and x.get('unidade') == u_trabalho
+                    )
+                ].copy()
 
-                df_unidade['display'] = (
-                    df_unidade['paciente_nome'].fillna('').str.upper() + " " +
-                    df_unidade['paciente_sobrenome'].fillna('').str.upper()
-                )
+                if not df_unidade.empty:
 
-                lista_pacientes_unidade = sorted(df_unidade['display'].tolist())
+                    df_unidade['display'] = (
+                        df_unidade['paciente_nome'].fillna('').str.upper() + " " +
+                        df_unidade['paciente_sobrenome'].fillna('').str.upper()
+                    )
+
+                    lista_pacientes_unidade = sorted(df_unidade['display'].tolist())
+
+        except Exception as e:
+            st.error(f"Erro ao carregar agenda: {e}")
 
         # ==========================================================
         # 3. BUSCA (CPF OU DATA)
@@ -935,7 +940,7 @@ elif menu == "10. Recepção e Triagem":
 
         try:
 
-            # ===== CPF =====
+            # ===== BUSCA POR CPF =====
             if cpf_busca and cpf_busca.strip() != "":
 
                 res_p = supabase.table("pacientes") \
@@ -949,7 +954,7 @@ elif menu == "10. Recepção e Triagem":
                 else:
                     st.warning("⚠️ CPF não encontrado")
 
-            # ===== DATA =====
+            # ===== BUSCA POR DATA =====
             elif usar_data and data_busca:
 
                 data_inicio = data_busca.isoformat() + "T00:00:00"
@@ -986,7 +991,7 @@ elif menu == "10. Recepção e Triagem":
                     st.warning("⚠️ Nenhum paciente encontrado nesta data")
 
         except Exception as e:
-            st.error(f"Erro ao buscar: {e}")
+            st.error(f"Erro ao buscar paciente: {e}")
 
         # ==========================================================
         # 4. FORMULÁRIO
@@ -1050,7 +1055,7 @@ elif menu == "10. Recepção e Triagem":
             submitted = st.form_submit_button("🚀 Finalizar Check-in")
 
         # ==========================================================
-        # 5. PROCESSAMENTO (FORA DO FORM)
+        # 5. PROCESSAMENTO
         # ==========================================================
         if submitted:
 
@@ -1097,13 +1102,14 @@ elif menu == "10. Recepção e Triagem":
 
                     supabase.table("atendimentos").insert(atend).execute()
 
-                    # 🔔 MENSAGEM ABAIXO DO BOTÃO
+                    # ✅ MENSAGEM FINAL
                     st.session_state["msg_checkin"] = "Check-in salvo para prontuário médico com sucesso"
 
                     st.rerun()
 
                 except Exception as e:
                     st.error(f"❌ Erro: {e}")
+
 
 # ==========================================================
 # TELA: PRONTUÁRIO MÉDICO (ATENDIMENTO) - FINAL DEFINITIVA
