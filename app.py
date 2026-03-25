@@ -1281,10 +1281,10 @@ if menu == "11. Prontuário Médico":
 
 
 
-# ==========================================================
-# TELA 12: CAIXA INTELIGENTE (COM CONVÊNIO)
-# ==========================================================
 
+# ==========================================================
+# TELA 12: CAIXA INTELIGENTE (VERSÃO FINAL CORRIGIDA)
+# ==========================================================
 elif menu == "12. Caixa":
 
     if verificar_senha():
@@ -1292,10 +1292,12 @@ elif menu == "12. Caixa":
         st.title("💰 Controle de Caixa")
         st.markdown("---")
 
-        hoje = dt_lib.datetime.now()
-        data_iso = hoje.date().isoformat()
-        data_br = hoje.strftime("%d/%m/%Y")
+        # DATA ATUAL
+        agora = dt_lib.datetime.now()
+        data_iso = agora.date().isoformat()
+        data_br = agora.strftime("%d/%m/%Y")
 
+        # UNIDADES
         unidades = [
             "Pç 7 Rua Carijos 424 SL 2213",
             "Pç 7 Rua Rio de Janeiro 462 SL 303",
@@ -1321,9 +1323,9 @@ elif menu == "12. Caixa":
         try:
             res_conv = supabase.table("convenios").select("*").execute()
             if res_conv.data:
-                lista_convenios = [c['nome'] for c in res_conv.data]
-        except:
-            pass
+                lista_convenios = [c["nome"] for c in res_conv.data]
+        except Exception as e:
+            st.warning(f"Erro ao carregar convênios: {e}")
 
         # ==========================================================
         # FORMULÁRIO
@@ -1339,11 +1341,11 @@ elif menu == "12. Caixa":
                 ["PIX", "Dinheiro", "Cartão", "Convênio", "Outro"]
             )
 
-            convenio_sel = None
             descricao = ""
+            convenio_sel = None
 
             # ======================================================
-            # CONVÊNIO (INTELIGENTE)
+            # SE FOR CONVÊNIO
             # ======================================================
             if forma == "Convênio":
 
@@ -1358,39 +1360,44 @@ elif menu == "12. Caixa":
                 with col_conv2:
                     novo_conv = st.text_input("Cadastrar Novo Convênio")
 
-                # salvar novo convênio
+                # CADASTRAR NOVO CONVÊNIO
                 if novo_conv:
                     try:
                         supabase.table("convenios").insert({
-                            "nome": novo_conv.upper()
+                            "nome": novo_conv.strip().upper()
                         }).execute()
-                        st.success("Convênio cadastrado")
+                        st.success("Convênio cadastrado. Recarregue para usar.")
                     except:
                         pass
 
                 # ==================================================
-                # PACIENTES DO DIA
+                # BUSCAR PACIENTES DO DIA (CORRIGIDO)
                 # ==================================================
                 pacientes_dia = []
 
                 try:
+                    inicio_dia = f"{data_iso}T00:00:00"
+                    fim_dia = f"{data_iso}T23:59:59"
+
                     res_p = supabase.table("CONSULTAS") \
                         .select("*") \
-                        .gte("data_hora", data_iso) \
+                        .eq("unidade", unidade) \
+                        .gte("data_hora", inicio_dia) \
+                        .lte("data_hora", fim_dia) \
                         .execute()
 
                     if res_p.data:
                         df_p = pd.DataFrame(res_p.data)
 
-                        df_p['nome_full'] = (
-                            df_p['paciente_nome'].fillna('') + " " +
-                            df_p['paciente_sobrenome'].fillna('')
+                        df_p["nome_full"] = (
+                            df_p["paciente_nome"].fillna("") + " " +
+                            df_p["paciente_sobrenome"].fillna("")
                         )
 
-                        pacientes_dia = df_p['nome_full'].tolist()
+                        pacientes_dia = df_p["nome_full"].str.strip().tolist()
 
-                except:
-                    pass
+                except Exception as e:
+                    st.warning(f"Erro ao buscar pacientes: {e}")
 
                 paciente_conv = st.selectbox(
                     "Paciente (Convênio)",
@@ -1411,12 +1418,12 @@ elif menu == "12. Caixa":
             if submitted:
 
                 if valor <= 0:
-                    st.error("⚠️ Informe valor válido")
+                    st.error("⚠️ Informe um valor válido")
 
                 elif forma == "Convênio" and (not convenio_sel or convenio_sel == "Selecione"):
                     st.error("⚠️ Selecione o convênio")
 
-                elif forma == "Convênio" and "Selecione" in descricao:
+                elif forma == "Convênio" and (not descricao or "Selecione" in descricao):
                     st.error("⚠️ Selecione o paciente")
 
                 else:
@@ -1429,7 +1436,7 @@ elif menu == "12. Caixa":
                             "descricao": descricao.upper(),
                             "unidade": unidade,
                             "data": data_iso,
-                            "data_hora": hoje.isoformat()
+                            "data_hora": agora.isoformat()
                         }
 
                         supabase.table("caixa").insert(registro).execute()
@@ -1437,12 +1444,12 @@ elif menu == "12. Caixa":
                         st.success("✅ Lançamento registrado com sucesso")
 
                     except Exception as e:
-                        st.error(f"❌ Erro: {e}")
+                        st.error(f"❌ Erro ao salvar: {e}")
 
         st.markdown("---")
 
         # ==========================================================
-        # RESUMO
+        # RESUMO DO DIA
         # ==========================================================
         try:
             res = supabase.table("caixa") \
@@ -1455,8 +1462,8 @@ elif menu == "12. Caixa":
 
                 df = pd.DataFrame(res.data)
 
-                entradas = df[df['tipo'] == "Entrada"]['valor'].sum()
-                saidas = df[df['tipo'] == "Saída"]['valor'].sum()
+                entradas = df[df["tipo"] == "Entrada"]["valor"].sum()
+                saidas = df[df["tipo"] == "Saída"]["valor"].sum()
                 saldo = entradas - saidas
 
                 c1, c2, c3 = st.columns(3)
@@ -1465,12 +1472,16 @@ elif menu == "12. Caixa":
                 c2.metric("Saídas", f"R$ {saidas:,.2f}")
                 c3.metric("Saldo", f"R$ {saldo:,.2f}")
 
-                df['data_hora'] = pd.to_datetime(df['data_hora']).dt.strftime("%d/%m/%Y %H:%M")
+                df["data_hora"] = pd.to_datetime(df["data_hora"]) \
+                    .dt.strftime("%d/%m/%Y %H:%M")
 
-                st.dataframe(df.sort_values(by="data_hora", ascending=False), use_container_width=True)
+                st.dataframe(
+                    df.sort_values(by="data_hora", ascending=False),
+                    use_container_width=True
+                )
 
             else:
-                st.info("Sem movimentações hoje")
+                st.info("ℹ️ Sem movimentações para esta unidade hoje.")
 
         except Exception as e:
             st.error(f"Erro ao carregar caixa: {e}")
