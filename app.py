@@ -842,6 +842,260 @@ if navegador == "9. Gestão de Especialidades":
 
 
 
+# ==========================================================
+# TELA 10: RECEPÇÃO E TRIAGEM (VERSÃO FINAL PROFISSIONAL)
+# ==========================================================
+
+elif menu == "10. Recepção e Triagem":
+
+    if verificar_senha():
+
+        st.title("🛎️ Recepção - Check-in Inteligente")
+        st.caption("Filtre por unidade para visualizar os agendamentos do dia.")
+        st.markdown("---")
+
+        # ==========================================================
+        # 1. UNIDADE
+        # ==========================================================
+        unidades_disponiveis = [
+            "Pç 7 Rua Carijos 424 SL 2213",
+            "Pç 7 Rua Rio de Janeiro 462 SL 303",
+            "Eldorado Av Jose Faria da Rocha 4408 2 and",
+            "Eldorado Av Jose Faria da Rocha 5959"
+        ]
+
+        u_trabalho = st.selectbox("📍 Unidade:", unidades_disponiveis)
+
+        # ==========================================================
+        # 2. AGENDA
+        # ==========================================================
+        hoje = dt_lib.datetime.now().date().isoformat()
+
+        res_agenda = supabase.table("CONSULTAS") \
+            .select("*, MEDICOS(nome, unidade)") \
+            .eq("status", "Marcada") \
+            .gte("data_hora", hoje) \
+            .execute()
+
+        lista_pacientes_unidade = []
+        df_unidade = pd.DataFrame()
+
+        if res_agenda.data:
+
+            df_ag = pd.DataFrame(res_agenda.data)
+
+            df_unidade = df_ag[
+                df_ag['MEDICOS'].apply(
+                    lambda x: isinstance(x, dict) and x.get('unidade') == u_trabalho
+                )
+            ].copy()
+
+            if not df_unidade.empty:
+
+                df_unidade['display'] = (
+                    df_unidade['paciente_nome'].fillna('').str.upper() + " " +
+                    df_unidade['paciente_sobrenome'].fillna('').str.upper()
+                )
+
+                lista_pacientes_unidade = sorted(df_unidade['display'].tolist())
+
+        # ==========================================================
+        # 3. BUSCA (CPF OU DATA)
+        # ==========================================================
+        col1, col2, col3 = st.columns(3)
+
+        with col1:
+            paciente_agendado = st.selectbox(
+                f"👥 Pacientes de Hoje ({u_trabalho})",
+                ["-- Selecione --"] + lista_pacientes_unidade
+            )
+
+        with col2:
+            cpf_busca = st.text_input("🔍 CPF")
+
+        with col3:
+            usar_data = st.checkbox("Buscar por Data")
+
+        data_busca = None
+
+        if usar_data:
+            data_busca = st.date_input(
+                "📅 Nascimento",
+                value=dt_lib.date(2000, 1, 1),
+                format="DD/MM/YYYY"
+            )
+
+        dados_carregados = {}
+
+        try:
+
+            # ===== CPF =====
+            if cpf_busca and cpf_busca.strip() != "":
+
+                res_p = supabase.table("pacientes") \
+                    .select("*") \
+                    .eq("cpf", cpf_busca.strip()) \
+                    .execute()
+
+                if res_p.data:
+                    dados_carregados = res_p.data[0]
+                    st.success("✅ Dados carregados pelo CPF")
+                else:
+                    st.warning("⚠️ CPF não encontrado")
+
+            # ===== DATA =====
+            elif usar_data and data_busca:
+
+                data_inicio = data_busca.isoformat() + "T00:00:00"
+                data_fim = data_busca.isoformat() + "T23:59:59"
+
+                res_p = supabase.table("pacientes") \
+                    .select("*") \
+                    .gte("data_nascimento", data_inicio) \
+                    .lte("data_nascimento", data_fim) \
+                    .execute()
+
+                if res_p.data:
+
+                    df_p = pd.DataFrame(res_p.data)
+
+                    df_p['display'] = (
+                        df_p['nome'].fillna('SEM NOME') + " | " +
+                        df_p['telefone'].fillna('')
+                    )
+
+                    paciente_sel = st.selectbox(
+                        "👤 Pacientes encontrados",
+                        ["Selecione"] + df_p['display'].tolist()
+                    )
+
+                    if paciente_sel != "Selecione":
+                        dados_carregados = df_p[
+                            df_p['display'] == paciente_sel
+                        ].iloc[0].to_dict()
+
+                        st.success("✅ Dados carregados pela data")
+
+                else:
+                    st.warning("⚠️ Nenhum paciente encontrado nesta data")
+
+        except Exception as e:
+            st.error(f"Erro ao buscar: {e}")
+
+        # ==========================================================
+        # 4. FORMULÁRIO
+        # ==========================================================
+        st.markdown("---")
+
+        with st.form("form_checkin"):
+
+            c1, c2, c3 = st.columns([3, 2, 2])
+
+            f_nome = c1.text_input(
+                "Nome",
+                value=dados_carregados.get(
+                    "nome",
+                    paciente_agendado if paciente_agendado != "-- Selecione --" else ""
+                )
+            )
+
+            f_cpf = c2.text_input(
+                "CPF (opcional)",
+                value=cpf_busca if cpf_busca else dados_carregados.get("cpf", "")
+            )
+
+            if dados_carregados.get("data_nascimento"):
+                try:
+                    data_padrao = pd.to_datetime(
+                        dados_carregados.get("data_nascimento")
+                    ).date()
+                except:
+                    data_padrao = dt_lib.date(2000, 1, 1)
+            else:
+                data_padrao = dt_lib.date(2000, 1, 1)
+
+            f_nasc = c3.date_input(
+                "Nascimento",
+                value=data_padrao,
+                format="DD/MM/YYYY"
+            )
+
+            c4, c5, c6 = st.columns(3)
+
+            f_tel = c4.text_input("Telefone", value=dados_carregados.get("telefone", ""))
+            f_conv = c5.text_input("Convênio", value=dados_carregados.get("convenio", "PARTICULAR"))
+            f_email = c6.text_input("Email", value=dados_carregados.get("email", ""))
+
+            st.subheader("Endereço")
+
+            ce1, ce2 = st.columns([1, 4])
+            f_cep = ce1.text_input("CEP", value=dados_carregados.get("cep", ""))
+            f_rua = ce2.text_input("Rua", value=dados_carregados.get("rua", ""))
+
+            ce3, ce4 = st.columns([1, 3])
+            f_num = ce3.text_input("Número", value=dados_carregados.get("numero", ""))
+            f_comp = ce4.text_input("Complemento", value=dados_carregados.get("complemento", ""))
+
+            ce5, ce6, ce7 = st.columns([2, 2, 1])
+            f_bairro = ce5.text_input("Bairro", value=dados_carregados.get("bairro", ""))
+            f_cid = ce6.text_input("Cidade", value=dados_carregados.get("cidade", "Belo Horizonte"))
+            f_uf = ce7.text_input("UF", value=dados_carregados.get("uf", "MG"))
+
+            if st.form_submit_button("🚀 Finalizar Check-in"):
+
+                if not f_nome:
+                    st.error("⚠️ Nome obrigatório")
+                else:
+                    try:
+
+                        # ===== CPF inteligente =====
+                        if not f_cpf:
+                            f_cpf = f"SEMCPF_{int(dt_lib.datetime.now().timestamp())}"
+
+                        ficha = {
+                            "cpf": f_cpf,
+                            "nome": f_nome.upper(),
+                            "data_nascimento": f_nasc.isoformat(),
+                            "telefone": f_tel,
+                            "convenio": f_conv.upper(),
+                            "email": f_email.lower(),
+                            "cep": f_cep,
+                            "rua": f_rua,
+                            "numero": f_num,
+                            "complemento": f_comp,
+                            "bairro": f_bairro,
+                            "cidade": f_cid,
+                            "uf": f_uf.upper()
+                        }
+
+                        # ===== SALVAR PACIENTE =====
+                        if f_cpf.startswith("SEMCPF"):
+                            supabase.table("pacientes").insert(ficha).execute()
+                        else:
+                            supabase.table("pacientes") \
+                                .upsert(ficha, on_conflict="cpf") \
+                                .execute()
+
+                        # ===== CRIAR ATENDIMENTO =====
+                        atend = {
+                            "paciente": f_nome.upper(),
+                            "cpf": f_cpf,
+                            "status": "Aguardando",
+                            "unidade": u_trabalho,
+                            "medico": "A DEFINIR",
+                            "triagem": f"NASC: {f_nasc.strftime('%d/%m/%Y')} | TEL: {f_tel}",
+                            "data_hora": dt_lib.datetime.now().isoformat()
+                        }
+
+                        supabase.table("atendimentos").insert(atend).execute()
+
+                        st.success("✅ Informações salvas no prontuário")
+                        st.rerun()
+
+                    except Exception as e:
+                        st.error(f"❌ Erro: {e}")
+
+
 
 # ==========================================================
 # TELA: PRONTUÁRIO MÉDICO (ATENDIMENTO) - FINAL COMPLETA
