@@ -1100,6 +1100,8 @@ elif menu == "10. Recepção e Triagem":
 
 
 
+
+
 # ==========================================================
 # TELA: PRONTUÁRIO MÉDICO (ATENDIMENTO)
 # ==========================================================
@@ -1167,6 +1169,43 @@ if menu == "11. Prontuário Médico":
             st.markdown("---")
 
             # ==========================================================
+            # 🆕 3.1 CONSULTAR PRONTUÁRIO ANTERIOR
+            # ==========================================================
+            if st.button("📖 Consultar Prontuário"):
+
+                try:
+                    res_hist = supabase.table("atendimentos")\
+                        .select("*")\
+                        .eq("cpf", dados_atend.get("cpf"))\
+                        .eq("status", "Finalizado")\
+                        .order("data_hora", desc=True)\
+                        .limit(5)\
+                        .execute()
+
+                    historico = res_hist.data if res_hist.data else []
+
+                    if historico:
+                        st.subheader("📚 Últimos Prontuários")
+
+                        for h in historico:
+                            data_formatada = pd.to_datetime(
+                                h.get("data_hora")
+                            ).strftime("%d/%m/%Y %H:%M")
+
+                            st.info(f"""
+🗓️ {data_formatada}
+
+{h.get('prontuario_texto', 'Sem registro')}
+                            """)
+                    else:
+                        st.warning("Nenhum prontuário anterior encontrado.")
+
+                except Exception as e:
+                    st.error(f"Erro ao consultar histórico: {e}")
+
+            st.markdown("---")
+
+            # ==========================================================
             # 4. FORMULÁRIO MÉDICO
             # ==========================================================
             with st.form("form_prontuario"):
@@ -1175,19 +1214,16 @@ if menu == "11. Prontuário Médico":
 
                 p_historico = st.text_area(
                     "1. Histórico (Anamnese e Queixas)",
-                    placeholder="Descreva o histórico da doença e queixas atuais do paciente...",
                     height=150
                 )
 
                 p_diagnostico = st.text_area(
                     "2. Diagnóstico (Exame Físico e Hipóteses)",
-                    placeholder="Descreva as observações do exame físico e as suspeitas diagnósticas...",
                     height=150
                 )
 
                 p_tratamento = st.text_area(
                     "3. Tratamento (Conduta e Prescrição)",
-                    placeholder="Descreva o tratamento, medicamentos prescritos e orientações finais...",
                     height=150
                 )
 
@@ -1197,11 +1233,17 @@ if menu == "11. Prontuário Médico":
                 if st.form_submit_button("Finalizar Atendimento e Assinar"):
 
                     if not p_historico or not p_tratamento:
-                        st.error("⚠️ Segundo o CFM, os campos de Histórico e Tratamento são obrigatórios.")
+                        st.error("⚠️ Histórico e Tratamento são obrigatórios.")
                     else:
                         try:
 
+                            agora = dt_lib.datetime.now()
+
+                            data_br = agora.strftime("%d/%m/%Y")
+                            hora_br = agora.strftime("%H:%M")
+
                             texto_final = (
+                                f"DATA: {data_br} | HORA: {hora_br}\n\n"
                                 f"HISTÓRICO: {p_historico}\n\n"
                                 f"DIAGNÓSTICO: {p_diagnostico}\n\n"
                                 f"TRATAMENTO: {p_tratamento}"
@@ -1215,16 +1257,12 @@ if menu == "11. Prontuário Médico":
                                 .eq("id", dados_atend.get('id'))\
                                 .execute()
 
-                            # 🔔 Mensagem persistente após reload
                             st.session_state["msg_prontuario"] = "Informações salvas no prontuário"
 
                             st.success(f"✅ Atendimento de {p_escolhido} finalizado com sucesso.")
                             st.balloons()
 
-                            try:
-                                st.rerun()
-                            except:
-                                pass
+                            st.rerun()
 
                         except Exception as e:
                             st.error(f"❌ Erro ao salvar prontuário: {e}")
