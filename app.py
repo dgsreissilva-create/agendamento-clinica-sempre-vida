@@ -907,92 +907,87 @@ elif menu == "10. Recepção e Triagem":
 
 
 
-
 # ==========================================================
-# BLOCO DE BUSCA (CPF OU DATA) - CORRIGIDO
-# ==========================================================
+        # 3. BUSCA (CPF OU DATA NASCIMENTO)
+        # ==========================================================
+        col1, col2, col3 = st.columns(3)
 
-col1, col2, col3 = st.columns(3)
-
-with col1:
-    paciente_agendado = st.selectbox(
-        f"👥 Pacientes de Hoje ({u_trabalho})",
-        ["-- Selecione --"] + lista_pacientes_unidade
-    )
-
-with col2:
-    cpf_busca = st.text_input("🔍 CPF")
-
-with col3:
-    usar_data = st.checkbox("Buscar por Data de Nascimento")
-
-data_busca = None
-
-if usar_data:
-    data_busca = st.date_input(
-        "📅 Nascimento",
-        value=dt_lib.date(2000, 1, 1),
-        format="DD/MM/YYYY"
-    )
-
-dados_carregados = {}
-
-try:
-
-    # ================= CPF =================
-    if cpf_busca and cpf_busca.strip() != "":
-
-        res_p = supabase.table("pacientes") \
-            .select("*") \
-            .eq("cpf", cpf_busca.strip()) \
-            .execute()
-
-        if res_p.data:
-            dados_carregados = res_p.data[0]
-            st.success("✅ Dados carregados pelo CPF")
-        else:
-            st.warning("⚠️ CPF não encontrado")
-
-    # ================= DATA =================
-    elif usar_data and data_busca:
-
-        data_inicio = data_busca.isoformat() + "T00:00:00"
-        data_fim = data_busca.isoformat() + "T23:59:59"
-
-        res_p = supabase.table("pacientes") \
-            .select("*") \
-            .gte("data_nascimento", data_inicio) \
-            .lte("data_nascimento", data_fim) \
-            .execute()
-
-        if res_p.data:
-
-            df_p = pd.DataFrame(res_p.data)
-
-            df_p['display'] = (
-                df_p['nome'].fillna('SEM NOME') + " | " +
-                df_p['telefone'].fillna('')
+        with col1:
+            paciente_agendado = st.selectbox(
+                f"👥 Pacientes de Hoje ({u_trabalho})",
+                ["-- Selecione --"] + lista_pacientes_unidade
             )
 
-            paciente_sel = st.selectbox(
-                "👤 Pacientes encontrados",
-                ["Selecione"] + df_p['display'].tolist()
+        with col2:
+            cpf_busca = st.text_input("🔍 CPF")
+
+        with col3:
+            data_busca = st.date_input(
+                "📅 Nascimento",
+                value=None,
+                format="DD/MM/YYYY"
             )
 
-            if paciente_sel != "Selecione":
+        dados_carregados = {}
 
-                dados_carregados = df_p[
-                    df_p['display'] == paciente_sel
-                ].iloc[0].to_dict()
+        try:
 
-                st.success("✅ Dados carregados pela data de nascimento")
+            # ---------------- CPF ----------------
+            if cpf_busca and cpf_busca.strip() != "":
 
-        else:
-            st.warning("⚠️ Nenhum paciente encontrado nesta data")
+                res_p = supabase.table("pacientes") \
+                    .select("*") \
+                    .eq("cpf", cpf_busca.strip()) \
+                    .execute()
 
-except Exception as e:
-    st.error(f"Erro ao buscar: {e}")
+                if res_p.data:
+                    dados_carregados = res_p.data[0]
+                    st.success("✅ Dados carregados pelo CPF")
+                else:
+                    st.warning("⚠️ CPF não encontrado")
 
+            # ---------------- DATA NASCIMENTO ----------------
+            elif data_busca:
+
+                data_inicio = data_busca.isoformat() + "T00:00:00"
+                data_fim = data_busca.isoformat() + "T23:59:59"
+
+                res_p = supabase.table("pacientes") \
+                    .select("*") \
+                    .gte("data_nascimento", data_inicio) \
+                    .lte("data_nascimento", data_fim) \
+                    .execute()
+
+                if res_p.data:
+
+                    df_p = pd.DataFrame(res_p.data)
+
+                    df_p['display'] = (
+                        df_p['nome'].fillna('SEM NOME') + " | " +
+                        df_p['telefone'].fillna('')
+                    )
+
+                    paciente_sel = st.selectbox(
+                        "👤 Pacientes encontrados",
+                        ["Selecione"] + df_p['display'].tolist()
+                    )
+
+                    if paciente_sel != "Selecione":
+
+                        dados_carregados = df_p[
+                            df_p['display'] == paciente_sel
+                        ].iloc[0].to_dict()
+
+                        st.success("✅ Dados carregados pela data de nascimento")
+
+                else:
+                    st.warning("⚠️ Nenhum paciente encontrado nesta data")
+
+        except Exception as e:
+            st.error(f"Erro ao buscar: {e}")
+
+        st.markdown("---")
+        
 
         
         # ==========================================================
