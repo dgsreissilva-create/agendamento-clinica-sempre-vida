@@ -846,7 +846,7 @@ if navegador == "9. Gestão de Especialidades":
 
 
 # ==========================================================
-# TELA 10: RECEPÇÃO E TRIAGEM (VERSÃO FINAL CORRIGIDA)
+# TELA 10: RECEPÇÃO E TRIAGEM (VERSÃO FINAL PROFISSIONAL)
 # ==========================================================
 
 elif menu == "10. Recepção e Triagem":
@@ -1051,6 +1051,7 @@ elif menu == "10. Recepção e Triagem":
                 else:
                     try:
 
+                        # ===== CPF inteligente =====
                         if not f_cpf:
                             f_cpf = f"SEMCPF_{int(dt_lib.datetime.now().timestamp())}"
 
@@ -1070,8 +1071,15 @@ elif menu == "10. Recepção e Triagem":
                             "uf": f_uf.upper()
                         }
 
-                        supabase.table("pacientes").upsert(ficha).execute()
+                        # ===== SALVAR PACIENTE =====
+                        if f_cpf.startswith("SEMCPF"):
+                            supabase.table("pacientes").insert(ficha).execute()
+                        else:
+                            supabase.table("pacientes") \
+                                .upsert(ficha, on_conflict="cpf") \
+                                .execute()
 
+                        # ===== CRIAR ATENDIMENTO =====
                         atend = {
                             "paciente": f_nome.upper(),
                             "cpf": f_cpf,
@@ -1089,6 +1097,7 @@ elif menu == "10. Recepção e Triagem":
 
                     except Exception as e:
                         st.error(f"❌ Erro: {e}")
+
 
 
 # ==========================================================
