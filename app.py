@@ -841,7 +841,6 @@ if navegador == "9. Gestão de Especialidades":
         st.caption("IA.na.Empresa - Gestão de Unidades e Especialidades")
 
 
-
 # ==========================================================
 # TELA 10: RECEPÇÃO E TRIAGEM (VERSÃO FINAL PROFISSIONAL)
 # ==========================================================
@@ -855,6 +854,13 @@ elif menu == "10. Recepção e Triagem":
         st.markdown("---")
 
         # ==========================================================
+        # 🔔 MENSAGEM PÓS-SALVAMENTO (ABAIXO DO BOTÃO)
+        # ==========================================================
+        if "msg_checkin" in st.session_state:
+            st.success(st.session_state["msg_checkin"])
+            del st.session_state["msg_checkin"]
+
+        # ==========================================================
         # 1. UNIDADE
         # ==========================================================
         unidades_disponiveis = [
@@ -864,7 +870,7 @@ elif menu == "10. Recepção e Triagem":
             "Eldorado Av Jose Faria da Rocha 5959"
         ]
 
-        u_trabalho = st.selectbox("📍 Unidade:", unidades_disponiveis)
+        u_trabalho = st.selectbox("📍 Unidade:", unidades_disiveis)
 
         # ==========================================================
         # 2. AGENDA
@@ -1041,60 +1047,63 @@ elif menu == "10. Recepção e Triagem":
             f_cid = ce6.text_input("Cidade", value=dados_carregados.get("cidade", "Belo Horizonte"))
             f_uf = ce7.text_input("UF", value=dados_carregados.get("uf", "MG"))
 
-            if st.form_submit_button("🚀 Finalizar Check-in"):
+            submitted = st.form_submit_button("🚀 Finalizar Check-in")
 
-                if not f_nome:
-                    st.error("⚠️ Nome obrigatório")
-                else:
-                    try:
+        # ==========================================================
+        # 5. PROCESSAMENTO (FORA DO FORM)
+        # ==========================================================
+        if submitted:
 
-                        # ===== CPF inteligente =====
-                        if not f_cpf:
-                            f_cpf = f"SEMCPF_{int(dt_lib.datetime.now().timestamp())}"
+            if not f_nome:
+                st.error("⚠️ Nome obrigatório")
+            else:
+                try:
 
-                        ficha = {
-                            "cpf": f_cpf,
-                            "nome": f_nome.upper(),
-                            "data_nascimento": f_nasc.isoformat(),
-                            "telefone": f_tel,
-                            "convenio": f_conv.upper(),
-                            "email": f_email.lower(),
-                            "cep": f_cep,
-                            "rua": f_rua,
-                            "numero": f_num,
-                            "complemento": f_comp,
-                            "bairro": f_bairro,
-                            "cidade": f_cid,
-                            "uf": f_uf.upper()
-                        }
+                    if not f_cpf:
+                        f_cpf = f"SEMCPF_{int(dt_lib.datetime.now().timestamp())}"
 
-                        # ===== SALVAR PACIENTE =====
-                        if f_cpf.startswith("SEMCPF"):
-                            supabase.table("pacientes").insert(ficha).execute()
-                        else:
-                            supabase.table("pacientes") \
-                                .upsert(ficha, on_conflict="cpf") \
-                                .execute()
+                    ficha = {
+                        "cpf": f_cpf,
+                        "nome": f_nome.upper(),
+                        "data_nascimento": f_nasc.isoformat(),
+                        "telefone": f_tel,
+                        "convenio": f_conv.upper(),
+                        "email": f_email.lower(),
+                        "cep": f_cep,
+                        "rua": f_rua,
+                        "numero": f_num,
+                        "complemento": f_comp,
+                        "bairro": f_bairro,
+                        "cidade": f_cid,
+                        "uf": f_uf.upper()
+                    }
 
-                        # ===== CRIAR ATENDIMENTO =====
-                        atend = {
-                            "paciente": f_nome.upper(),
-                            "cpf": f_cpf,
-                            "status": "Aguardando",
-                            "unidade": u_trabalho,
-                            "medico": "A DEFINIR",
-                            "triagem": f"NASC: {f_nasc.strftime('%d/%m/%Y')} | TEL: {f_tel}",
-                            "data_hora": dt_lib.datetime.now().isoformat()
-                        }
+                    if f_cpf.startswith("SEMCPF"):
+                        supabase.table("pacientes").insert(ficha).execute()
+                    else:
+                        supabase.table("pacientes") \
+                            .upsert(ficha, on_conflict="cpf") \
+                            .execute()
 
-                        supabase.table("atendimentos").insert(atend).execute()
+                    atend = {
+                        "paciente": f_nome.upper(),
+                        "cpf": f_cpf,
+                        "status": "Aguardando",
+                        "unidade": u_trabalho,
+                        "medico": "A DEFINIR",
+                        "triagem": f"NASC: {f_nasc.strftime('%d/%m/%Y')} | TEL: {f_tel}",
+                        "data_hora": dt_lib.datetime.now().isoformat()
+                    }
 
-                        st.success("✅ Informações salvas no prontuário")
-                        st.rerun()
+                    supabase.table("atendimentos").insert(atend).execute()
 
-                    except Exception as e:
-                        st.error(f"❌ Erro: {e}")
+                    # 🔔 MENSAGEM ABAIXO DO BOTÃO
+                    st.session_state["msg_checkin"] = "Check-in salvo para prontuário médico com sucesso"
 
+                    st.rerun()
+
+                except Exception as e:
+                    st.error(f"❌ Erro: {e}")
 
 # ==========================================================
 # TELA: PRONTUÁRIO MÉDICO (ATENDIMENTO) - FINAL DEFINITIVA
