@@ -842,6 +842,7 @@ if navegador == "9. Gestão de Especialidades":
 
 
 
+
 # ==========================================================
 # TELA 10: RECEPÇÃO E TRIAGEM (VERSÃO FINAL PROFISSIONAL)
 # ==========================================================
@@ -853,13 +854,6 @@ elif menu == "10. Recepção e Triagem":
         st.title("🛎️ Recepção - Check-in Inteligente")
         st.caption("Filtre por unidade para visualizar os agendamentos do dia.")
         st.markdown("---")
-
-        # ==========================================================
-        # 🔔 MENSAGEM PÓS-SALVAMENTO
-        # ==========================================================
-        if "msg_checkin" in st.session_state:
-            st.success(st.session_state["msg_checkin"])
-            del st.session_state["msg_checkin"]
 
         # ==========================================================
         # 1. UNIDADE
@@ -1054,61 +1048,60 @@ elif menu == "10. Recepção e Triagem":
 
             submitted = st.form_submit_button("🚀 Finalizar Check-in")
 
-        # ==========================================================
-        # 5. PROCESSAMENTO
-        # ==========================================================
-        if submitted:
+            # ==========================================================
+            # ✅ PROCESSAMENTO + MENSAGEM ABAIXO DO BOTÃO
+            # ==========================================================
+            if submitted:
 
-            if not f_nome:
-                st.error("⚠️ Nome obrigatório")
-            else:
-                try:
+                if not f_nome:
+                    st.error("⚠️ Nome obrigatório")
+                else:
+                    try:
 
-                    if not f_cpf:
-                        f_cpf = f"SEMCPF_{int(dt_lib.datetime.now().timestamp())}"
+                        if not f_cpf:
+                            f_cpf = f"SEMCPF_{int(dt_lib.datetime.now().timestamp())}"
 
-                    ficha = {
-                        "cpf": f_cpf,
-                        "nome": f_nome.upper(),
-                        "data_nascimento": f_nasc.isoformat(),
-                        "telefone": f_tel,
-                        "convenio": f_conv.upper(),
-                        "email": f_email.lower(),
-                        "cep": f_cep,
-                        "rua": f_rua,
-                        "numero": f_num,
-                        "complemento": f_comp,
-                        "bairro": f_bairro,
-                        "cidade": f_cid,
-                        "uf": f_uf.upper()
-                    }
+                        ficha = {
+                            "cpf": f_cpf,
+                            "nome": f_nome.upper(),
+                            "data_nascimento": f_nasc.isoformat(),
+                            "telefone": f_tel,
+                            "convenio": f_conv.upper(),
+                            "email": f_email.lower(),
+                            "cep": f_cep,
+                            "rua": f_rua,
+                            "numero": f_num,
+                            "complemento": f_comp,
+                            "bairro": f_bairro,
+                            "cidade": f_cid,
+                            "uf": f_uf.upper()
+                        }
 
-                    if f_cpf.startswith("SEMCPF"):
-                        supabase.table("pacientes").insert(ficha).execute()
-                    else:
-                        supabase.table("pacientes") \
-                            .upsert(ficha, on_conflict="cpf") \
-                            .execute()
+                        if f_cpf.startswith("SEMCPF"):
+                            supabase.table("pacientes").insert(ficha).execute()
+                        else:
+                            supabase.table("pacientes") \
+                                .upsert(ficha, on_conflict="cpf") \
+                                .execute()
 
-                    atend = {
-                        "paciente": f_nome.upper(),
-                        "cpf": f_cpf,
-                        "status": "Aguardando",
-                        "unidade": u_trabalho,
-                        "medico": "A DEFINIR",
-                        "triagem": f"NASC: {f_nasc.strftime('%d/%m/%Y')} | TEL: {f_tel}",
-                        "data_hora": dt_lib.datetime.now().isoformat()
-                    }
+                        atend = {
+                            "paciente": f_nome.upper(),
+                            "cpf": f_cpf,
+                            "status": "Aguardando",
+                            "unidade": u_trabalho,
+                            "medico": "A DEFINIR",
+                            "triagem": f"NASC: {f_nasc.strftime('%d/%m/%Y')} | TEL: {f_tel}",
+                            "data_hora": dt_lib.datetime.now().isoformat()
+                        }
 
-                    supabase.table("atendimentos").insert(atend).execute()
+                        supabase.table("atendimentos").insert(atend).execute()
 
-                    # ✅ MENSAGEM FINAL
-                    st.session_state["msg_checkin"] = "Check-in salvo para prontuário médico com sucesso"
+                        st.success("✅ Check-in salvo para prontuário médico com sucesso")
 
-                    st.rerun()
+                    except Exception as e:
+                        st.error(f"❌ Erro: {e}")
 
-                except Exception as e:
-                    st.error(f"❌ Erro: {e}")
+
 
 
 # ==========================================================
