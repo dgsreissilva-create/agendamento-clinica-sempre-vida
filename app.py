@@ -1096,9 +1096,8 @@ elif menu == "10. Recepção e Triagem":
                         st.error(f"❌ Erro: {e}")
 
 
-
 # ==========================================================
-# TELA: PRONTUÁRIO MÉDICO (ATENDIMENTO) - FINAL COMPLETA
+# TELA: PRONTUÁRIO MÉDICO (ATENDIMENTO) - FINAL DEFINITIVA
 # ==========================================================
 if menu == "11. Prontuário Médico":
     if verificar_senha():
@@ -1106,13 +1105,6 @@ if menu == "11. Prontuário Médico":
         st.title("🩺 Prontuário Eletrônico do Paciente")
         st.caption("Padrão de Registro Clínico - Conselho Federal de Medicina")
         st.markdown("---")
-
-        # ==========================================================
-        # 🔔 MENSAGEM PÓS-SALVAMENTO
-        # ==========================================================
-        if "msg_prontuario" in st.session_state:
-            st.success(st.session_state["msg_prontuario"])
-            del st.session_state["msg_prontuario"]
 
         # ==========================================================
         # 1. BUSCA PACIENTES AGUARDANDO
@@ -1149,7 +1141,7 @@ if menu == "11. Prontuário Médico":
             )
 
             # ==========================================================
-            # 🔥 SELEÇÃO OBRIGATÓRIA
+            # SELEÇÃO OBRIGATÓRIA
             # ==========================================================
             unidades = [
                 "Selecione...",
@@ -1196,7 +1188,7 @@ if menu == "11. Prontuário Médico":
             st.markdown("---")
 
             # ==========================================================
-            # 📖 CONSULTAR PRONTUÁRIO
+            # CONSULTAR PRONTUÁRIO
             # ==========================================================
             if st.button("📖 Consultar Prontuário"):
 
@@ -1237,7 +1229,7 @@ if menu == "11. Prontuário Médico":
 
                 if st.form_submit_button("Finalizar Atendimento"):
 
-                    # 🚨 VALIDAÇÕES
+                    # VALIDAÇÕES
                     if unidade_atual == "Selecione..." or medico_atual == "Selecione...":
                         st.error("⚠️ Unidade e Médico são obrigatórios.")
                     elif not p_historico or not p_tratamento:
@@ -1268,11 +1260,8 @@ if menu == "11. Prontuário Médico":
                                 .eq("id", dados_atend.get('id'))\
                                 .execute()
 
-                            # 🔔 MENSAGEM FINAL PADRÃO
-                            st.session_state["msg_prontuario"] = "Prontuário salvo com sucesso"
-
+                            # ✅ MENSAGEM ABAIXO DO BOTÃO
                             st.success("✅ Prontuário salvo com sucesso")
-                            st.rerun()
 
                         except Exception as e:
                             st.error(f"❌ Erro ao salvar prontuário: {e}")
