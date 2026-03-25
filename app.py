@@ -1101,9 +1101,8 @@ elif menu == "10. Recepção e Triagem":
 
 
 
-
 # ==========================================================
-# TELA: PRONTUÁRIO MÉDICO (ATENDIMENTO)
+# TELA: PRONTUÁRIO MÉDICO (ATENDIMENTO) - FINAL COMPLETA
 # ==========================================================
 if menu == "11. Prontuário Médico":
     if verificar_senha():
@@ -1161,7 +1160,18 @@ if menu == "11. Prontuário Médico":
                 st.stop()
 
             # ==========================================================
-            # 3. TRIAGEM
+            # 🔥 IDENTIFICAÇÃO AUTOMÁTICA
+            # ==========================================================
+            unidade_atual = dados_atend.get("unidade", "NÃO INFORMADO")
+            medico_atual = dados_atend.get("medico", "NÃO DEFINIDO")
+
+            st.success(f"""
+🏥 Unidade: {unidade_atual}  
+👨‍⚕️ Médico: {medico_atual}
+""")
+
+            # ==========================================================
+            # TRIAGEM
             # ==========================================================
             triagem_txt = dados_atend.get('triagem', 'Sem dados de triagem')
             st.warning(f"**Dados de Triagem:** {triagem_txt}")
@@ -1169,7 +1179,7 @@ if menu == "11. Prontuário Médico":
             st.markdown("---")
 
             # ==========================================================
-            # 🆕 3.1 CONSULTAR PRONTUÁRIO ANTERIOR
+            # 📖 CONSULTAR PRONTUÁRIO ANTERIOR
             # ==========================================================
             if st.button("📖 Consultar Prontuário"):
 
@@ -1206,7 +1216,7 @@ if menu == "11. Prontuário Médico":
             st.markdown("---")
 
             # ==========================================================
-            # 4. FORMULÁRIO MÉDICO
+            # FORMULÁRIO MÉDICO
             # ==========================================================
             with st.form("form_prontuario"):
 
@@ -1228,7 +1238,7 @@ if menu == "11. Prontuário Médico":
                 )
 
                 # ==========================================================
-                # 5. FINALIZAR ATENDIMENTO
+                # FINALIZAR ATENDIMENTO
                 # ==========================================================
                 if st.form_submit_button("Finalizar Atendimento e Assinar"):
 
@@ -1243,6 +1253,8 @@ if menu == "11. Prontuário Médico":
                             hora_br = agora.strftime("%H:%M")
 
                             texto_final = (
+                                f"UNIDADE: {unidade_atual}\n"
+                                f"MÉDICO: {medico_atual}\n"
                                 f"DATA: {data_br} | HORA: {hora_br}\n\n"
                                 f"HISTÓRICO: {p_historico}\n\n"
                                 f"DIAGNÓSTICO: {p_diagnostico}\n\n"
@@ -1252,7 +1264,9 @@ if menu == "11. Prontuário Médico":
                             supabase.table("atendimentos")\
                                 .update({
                                     "prontuario_texto": texto_final,
-                                    "status": "Finalizado"
+                                    "status": "Finalizado",
+                                    "medico": medico_atual,
+                                    "unidade": unidade_atual
                                 })\
                                 .eq("id", dados_atend.get('id'))\
                                 .execute()
