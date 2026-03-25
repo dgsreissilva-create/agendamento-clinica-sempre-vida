@@ -40,7 +40,8 @@ menu = st.sidebar.radio("Navegação", [
     "8. Relatório Gerencial",
     "9. Gestão de Especialidades",
     "10. Recepção e Triagem",
-    "11. Prontuário Médico"
+    "11. Prontuário Médico",
+    "12. Caixa"
   
     
 ], index=2)
@@ -1273,3 +1274,134 @@ if menu == "11. Prontuário Médico":
 
                         except Exception as e:
                             st.error(f"❌ Erro ao salvar prontuário: {e}")
+
+
+
+# ==========================================================
+# TELA 12: CAIXA (CONTROLE FINANCEIRO)
+# ==========================================================
+
+elif menu == "12. Caixa":
+
+    if verificar_senha():
+
+        st.title("💰 Controle de Caixa")
+        st.caption("Gestão de entradas e saídas da clínica")
+        st.markdown("---")
+
+        # ==========================================================
+        # 1. DATA E UNIDADE
+        # ==========================================================
+        hoje = dt_lib.datetime.now()
+        data_br = hoje.strftime("%d/%m/%Y")
+
+        unidades = [
+            "Pç 7 Rua Carijos 424 SL 2213",
+            "Pç 7 Rua Rio de Janeiro 462 SL 303",
+            "Eldorado Av Jose Faria da Rocha 4408 2 and",
+            "Eldorado Av Jose Faria da Rocha 5959"
+        ]
+
+        col1, col2 = st.columns(2)
+
+        with col1:
+            unidade = st.selectbox("📍 Unidade", unidades)
+
+        with col2:
+            st.text_input("📅 Data", value=data_br, disabled=True)
+
+        st.markdown("---")
+
+        # ==========================================================
+        # 2. LANÇAMENTO
+        # ==========================================================
+        with st.form("form_caixa"):
+
+            c1, c2, c3 = st.columns(3)
+
+            tipo = c1.selectbox("Tipo", ["Entrada", "Saída"])
+
+            valor = c2.number_input("Valor R$", min_value=0.0, format="%.2f")
+
+            forma = c3.selectbox(
+                "Forma de Pagamento",
+                ["PIX", "Dinheiro", "Cartão", "Convênio", "Outro"]
+            )
+
+            descricao = st.text_input("Descrição")
+
+            submitted = st.form_submit_button("💾 Registrar Lançamento")
+
+            # ==========================================================
+            # PROCESSAMENTO
+            # ==========================================================
+            if submitted:
+
+                if valor <= 0:
+                    st.error("⚠️ Informe um valor válido")
+                elif not descricao:
+                    st.error("⚠️ Informe a descrição")
+                else:
+                    try:
+
+                        registro = {
+                            "tipo": tipo,
+                            "valor": float(valor),
+                            "forma_pagamento": forma,
+                            "descricao": descricao.upper(),
+                            "unidade": unidade,
+                            "data": hoje.date().isoformat(),
+                            "data_hora": hoje.isoformat()
+                        }
+
+                        supabase.table("caixa").insert(registro).execute()
+
+                        st.success("✅ Lançamento registrado com sucesso")
+
+                    except Exception as e:
+                        st.error(f"❌ Erro: {e}")
+
+        st.markdown("---")
+
+        # ==========================================================
+        # 3. LISTAGEM DO DIA
+        # ==========================================================
+        try:
+
+            res = supabase.table("caixa") \
+                .select("*") \
+                .eq("unidade", unidade) \
+                .eq("data", hoje.date().isoformat()) \
+                .execute()
+
+            if res.data:
+
+                df = pd.DataFrame(res.data)
+
+                df['valor'] = df['valor'].astype(float)
+
+                entradas = df[df['tipo'] == "Entrada"]['valor'].sum()
+                saidas = df[df['tipo'] == "Saída"]['valor'].sum()
+                saldo = entradas - saidas
+
+                st.subheader("📊 Resumo do Dia")
+
+                c1, c2, c3 = st.columns(3)
+
+                c1.metric("Entradas", f"R$ {entradas:,.2f}")
+                c2.metric("Saídas", f"R$ {saidas:,.2f}")
+                c3.metric("Saldo", f"R$ {saldo:,.2f}")
+
+                st.markdown("---")
+
+                st.subheader("📋 Movimentações")
+
+                df['data_hora'] = pd.to_datetime(df['data_hora']).dt.strftime("%d/%m/%Y %H:%M")
+
+                st.dataframe(df.sort_values(by="data_hora", ascending=False), use_container_width=True)
+
+            else:
+                st.info("ℹ️ Nenhuma movimentação no dia")
+
+        except Exception as e:
+            st.error(f"Erro ao carregar caixa: {e}")
