@@ -1507,3 +1507,4 @@ elif menu == "12. Caixa":
 
         except Exception as e:
             st.error(f"Erro ao carregar caixa: {e}")
+
