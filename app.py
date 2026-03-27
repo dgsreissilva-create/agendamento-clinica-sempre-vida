@@ -1318,9 +1318,8 @@ if menu == "11. Prontuário Médico":
 
 
 
-
 # ==========================================================
-# TELA 12: CAIXA INTELIGENTE (COM MÉDICO)
+# TELA 12: CAIXA INTELIGENTE (FINAL COM MÉDICO NOME)
 # ==========================================================
 
 elif menu == "12. Caixa":
@@ -1363,14 +1362,14 @@ elif menu == "12. Caixa":
             pass
 
         # ==========================================================
-        # MÉDICOS (VINDO DAS CONSULTAS)
+        # MÉDICOS (COM NOME)
         # ==========================================================
         lista_medicos = []
         try:
-            res_m = supabase.table("CONSULTAS").select("medico_id").execute()
+            res_m = supabase.table("medicos").select("nome").execute()
             if res_m.data:
                 lista_medicos = sorted(
-                    list(set([str(m["medico_id"]) for m in res_m.data if m["medico_id"]]))
+                    list(set([m["nome"] for m in res_m.data if m["nome"]]))
                 )
         except:
             pass
