@@ -1318,8 +1318,9 @@ if menu == "11. Prontuário Médico":
 
 
 
+
 # ==========================================================
-# TELA 12: CAIXA INTELIGENTE (VERSÃO PROFISSIONAL)
+# TELA 12: CAIXA INTELIGENTE (COM MÉDICO)
 # ==========================================================
 
 elif menu == "12. Caixa":
@@ -1351,10 +1352,9 @@ elif menu == "12. Caixa":
         st.markdown("---")
 
         # ==========================================================
-        # PACIENTES (AUTO DA TELA 10)
+        # PACIENTES
         # ==========================================================
         lista_pacientes = []
-
         try:
             res_p = supabase.table("pacientes").select("nome").execute()
             if res_p.data:
@@ -1363,37 +1363,57 @@ elif menu == "12. Caixa":
             pass
 
         # ==========================================================
+        # MÉDICOS (VINDO DAS CONSULTAS)
+        # ==========================================================
+        lista_medicos = []
+        try:
+            res_m = supabase.table("CONSULTAS").select("medico_id").execute()
+            if res_m.data:
+                lista_medicos = sorted(
+                    list(set([str(m["medico_id"]) for m in res_m.data if m["medico_id"]]))
+                )
+        except:
+            pass
+
+        # ==========================================================
         # FORMULÁRIO
         # ==========================================================
         with st.form("form_caixa"):
 
-            c1, c2, c3 = st.columns(3)
+            c1, c2, c3, c4 = st.columns(4)
 
             tipo = c1.selectbox("Tipo", ["Entrada", "Saída"])
 
             forma = c2.selectbox(
-                "Forma de Pagamento",
+                "Forma",
                 ["PIX", "Dinheiro", "Cartão", "Convênio"]
             )
 
             paciente = c3.selectbox(
-                "Paciente (opcional)",
+                "Paciente",
                 [""] + lista_pacientes
             )
+
+            medico = c4.selectbox(
+                "Médico",
+                [""] + lista_medicos
+            )
+
+            # ======================================================
+            # VALORES (CAMPO MENOR)
+            # ======================================================
+            col_valor1, col_valor2 = st.columns([1,1])
 
             valor = 0.0
             faturado = 0.0
 
-            # ======================================================
-            # REGRAS DE VALOR
-            # ======================================================
             if forma in ["PIX", "Dinheiro", "Cartão"]:
-                valor = st.number_input("Valor R$", min_value=0.0, format="%.2f")
+                valor = col_valor1.number_input("Valor R$", min_value=0.0, format="%.2f")
 
             elif forma == "Convênio":
-                faturado = st.number_input("Valor Faturado R$", min_value=0.0, format="%.2f")
+                faturado = col_valor1.number_input("Faturado R$", min_value=0.0, format="%.2f")
 
-            descricao = st.text_input("Descrição")
+            descricao = col_valor2.text_input("Descrição")
 
             submitted = st.form_submit_button("💾 Registrar")
 
@@ -1406,7 +1426,7 @@ elif menu == "12. Caixa":
                     st.error("⚠️ Informe o valor")
 
                 elif forma == "Convênio" and faturado <= 0:
-                    st.error("⚠️ Informe o valor do convênio")
+                    st.error("⚠️ Informe valor do convênio")
 
                 else:
                     try:
@@ -1418,6 +1438,7 @@ elif menu == "12. Caixa":
                             "forma_pagamento": forma,
                             "descricao": descricao.upper(),
                             "paciente": paciente,
+                            "medico": medico,
                             "unidade": unidade,
                             "data": data_iso,
                             "data_hora": hoje.isoformat()
@@ -1449,7 +1470,6 @@ elif menu == "12. Caixa":
                 entradas = df[df['tipo'] == "Entrada"]['valor'].sum()
                 faturado_total = df['faturado'].sum()
                 saidas = df[df['tipo'] == "Saída"]['valor'].sum()
-
                 saldo = entradas - saidas
 
                 c1, c2, c3, c4 = st.columns(4)
@@ -1461,7 +1481,10 @@ elif menu == "12. Caixa":
 
                 df['data_hora'] = pd.to_datetime(df['data_hora']).dt.strftime("%d/%m/%Y %H:%M")
 
-                st.dataframe(df.sort_values(by="data_hora", ascending=False), use_container_width=True)
+                st.dataframe(
+                    df.sort_values(by="data_hora", ascending=False),
+                    use_container_width=True
+                )
 
             else:
                 st.info("Sem movimentações hoje")
