@@ -844,8 +844,10 @@ if navegador == "9. Gestão de Especialidades":
 
 
 
+
+
 # ==========================================================
-# TELA 10: RECEPÇÃO E TRIAGEM (VERSÃO FINAL PROFISSIONAL)
+# TELA 10: RECEPÇÃO E TRIAGEM (VERSÃO FINAL INTELIGENTE)
 # ==========================================================
 
 elif menu == "10. Recepção e Triagem":
@@ -869,44 +871,50 @@ elif menu == "10. Recepção e Triagem":
         u_trabalho = st.selectbox("📍 Unidade:", unidades_disponiveis)
 
         # ==========================================================
-        # 2. AGENDA
+        # 2. AGENDA (FILTRO CORRETO)
         # ==========================================================
         hoje = dt_lib.datetime.now().date().isoformat()
+        inicio_dia = f"{hoje}T00:00:00"
+        fim_dia = f"{hoje}T23:59:59"
 
         lista_pacientes_unidade = []
-        df_unidade = pd.DataFrame()
+        mapa_pacientes = {}
 
         try:
             res_agenda = supabase.table("CONSULTAS") \
-                .select("*, MEDICOS(nome, unidade)") \
+                .select("*") \
                 .eq("status", "Marcada") \
-                .gte("data_hora", hoje) \
+                .eq("unidade", u_trabalho) \
+                .gte("data_hora", inicio_dia) \
+                .lte("data_hora", fim_dia) \
                 .execute()
 
             if res_agenda.data:
 
                 df_ag = pd.DataFrame(res_agenda.data)
 
-                df_unidade = df_ag[
-                    df_ag['MEDICOS'].apply(
-                        lambda x: isinstance(x, dict) and x.get('unidade') == u_trabalho
-                    )
-                ].copy()
+                df_ag["display"] = (
+                    df_ag["paciente_nome"].fillna("").str.upper() + " " +
+                    df_ag["paciente_sobrenome"].fillna("").str.upper()
+                )
 
-                if not df_unidade.empty:
+                for _, row in df_ag.iterrows():
 
-                    df_unidade['display'] = (
-                        df_unidade['paciente_nome'].fillna('').str.upper() + " " +
-                        df_unidade['paciente_sobrenome'].fillna('').str.upper()
-                    )
+                    nome_display = row["display"].strip()
 
-                    lista_pacientes_unidade = sorted(df_unidade['display'].tolist())
+                    mapa_pacientes[nome_display] = {
+                        "nome": row.get("paciente_nome", ""),
+                        "telefone": row.get("paciente_telefone", ""),
+                        "convenio": row.get("paciente_convenio", "")
+                    }
+
+                lista_pacientes_unidade = sorted(mapa_pacientes.keys())
 
         except Exception as e:
             st.error(f"Erro ao carregar agenda: {e}")
 
         # ==========================================================
-        # 3. BUSCA (CPF OU DATA)
+        # 3. BUSCA
         # ==========================================================
         col1, col2, col3 = st.columns(3)
 
@@ -933,10 +941,12 @@ elif menu == "10. Recepção e Triagem":
 
         dados_carregados = {}
 
+        # ==========================================================
+        # 4. BUSCA BANCO
+        # ==========================================================
         try:
 
-            # ===== BUSCA POR CPF =====
-            if cpf_busca and cpf_busca.strip() != "":
+            if cpf_busca.strip():
 
                 res_p = supabase.table("pacientes") \
                     .select("*") \
@@ -946,50 +956,44 @@ elif menu == "10. Recepção e Triagem":
                 if res_p.data:
                     dados_carregados = res_p.data[0]
                     st.success("✅ Dados carregados pelo CPF")
-                else:
-                    st.warning("⚠️ CPF não encontrado")
 
-            # ===== BUSCA POR DATA =====
             elif usar_data and data_busca:
 
-                data_inicio = data_busca.isoformat() + "T00:00:00"
-                data_fim = data_busca.isoformat() + "T23:59:59"
+                inicio = data_busca.isoformat() + "T00:00:00"
+                fim = data_busca.isoformat() + "T23:59:59"
 
                 res_p = supabase.table("pacientes") \
                     .select("*") \
-                    .gte("data_nascimento", data_inicio) \
-                    .lte("data_nascimento", data_fim) \
+                    .gte("data_nascimento", inicio) \
+                    .lte("data_nascimento", fim) \
                     .execute()
 
                 if res_p.data:
 
                     df_p = pd.DataFrame(res_p.data)
 
-                    df_p['display'] = (
-                        df_p['nome'].fillna('SEM NOME') + " | " +
-                        df_p['telefone'].fillna('')
+                    df_p["display"] = (
+                        df_p["nome"].fillna("SEM NOME") + " | " +
+                        df_p["telefone"].fillna("")
                     )
 
                     paciente_sel = st.selectbox(
                         "👤 Pacientes encontrados",
-                        ["Selecione"] + df_p['display'].tolist()
+                        ["Selecione"] + df_p["display"].tolist()
                     )
 
                     if paciente_sel != "Selecione":
                         dados_carregados = df_p[
-                            df_p['display'] == paciente_sel
+                            df_p["display"] == paciente_sel
                         ].iloc[0].to_dict()
 
                         st.success("✅ Dados carregados pela data")
-
-                else:
-                    st.warning("⚠️ Nenhum paciente encontrado nesta data")
 
         except Exception as e:
             st.error(f"Erro ao buscar paciente: {e}")
 
         # ==========================================================
-        # 4. FORMULÁRIO
+        # 5. FORMULÁRIO
         # ==========================================================
         st.markdown("---")
 
@@ -1001,7 +1005,7 @@ elif menu == "10. Recepção e Triagem":
                 "Nome",
                 value=dados_carregados.get(
                     "nome",
-                    paciente_agendado if paciente_agendado != "-- Selecione --" else ""
+                    mapa_pacientes.get(paciente_agendado, {}).get("nome", "")
                 )
             )
 
@@ -1010,47 +1014,51 @@ elif menu == "10. Recepção e Triagem":
                 value=cpf_busca if cpf_busca else dados_carregados.get("cpf", "")
             )
 
-            if dados_carregados.get("data_nascimento"):
-                try:
-                    data_padrao = pd.to_datetime(
-                        dados_carregados.get("data_nascimento")
-                    ).date()
-                except:
-                    data_padrao = dt_lib.date(2000, 1, 1)
-            else:
-                data_padrao = dt_lib.date(2000, 1, 1)
-
             f_nasc = c3.date_input(
                 "Nascimento",
-                value=data_padrao,
+                value=dt_lib.date(2000, 1, 1),
                 format="DD/MM/YYYY"
             )
 
             c4, c5, c6 = st.columns(3)
 
-            f_tel = c4.text_input("Telefone", value=dados_carregados.get("telefone", ""))
-            f_conv = c5.text_input("Convênio", value=dados_carregados.get("convenio", "PARTICULAR"))
+            f_tel = c4.text_input(
+                "Telefone",
+                value=dados_carregados.get(
+                    "telefone",
+                    mapa_pacientes.get(paciente_agendado, {}).get("telefone", "")
+                )
+            )
+
+            f_conv = c5.text_input(
+                "Convênio",
+                value=dados_carregados.get(
+                    "convenio",
+                    mapa_pacientes.get(paciente_agendado, {}).get("convenio", "PARTICULAR")
+                )
+            )
+
             f_email = c6.text_input("Email", value=dados_carregados.get("email", ""))
 
             st.subheader("Endereço")
 
             ce1, ce2 = st.columns([1, 4])
-            f_cep = ce1.text_input("CEP", value=dados_carregados.get("cep", ""))
-            f_rua = ce2.text_input("Rua", value=dados_carregados.get("rua", ""))
+            f_cep = ce1.text_input("CEP")
+            f_rua = ce2.text_input("Rua")
 
             ce3, ce4 = st.columns([1, 3])
-            f_num = ce3.text_input("Número", value=dados_carregados.get("numero", ""))
-            f_comp = ce4.text_input("Complemento", value=dados_carregados.get("complemento", ""))
+            f_num = ce3.text_input("Número")
+            f_comp = ce4.text_input("Complemento")
 
             ce5, ce6, ce7 = st.columns([2, 2, 1])
-            f_bairro = ce5.text_input("Bairro", value=dados_carregados.get("bairro", ""))
-            f_cid = ce6.text_input("Cidade", value=dados_carregados.get("cidade", "Belo Horizonte"))
-            f_uf = ce7.text_input("UF", value=dados_carregados.get("uf", "MG"))
+            f_bairro = ce5.text_input("Bairro")
+            f_cid = ce6.text_input("Cidade", value="Belo Horizonte")
+            f_uf = ce7.text_input("UF", value="MG")
 
             submitted = st.form_submit_button("🚀 Finalizar Check-in")
 
             # ==========================================================
-            # ✅ PROCESSAMENTO + MENSAGEM ABAIXO DO BOTÃO
+            # PROCESSAMENTO
             # ==========================================================
             if submitted:
 
@@ -1081,9 +1089,7 @@ elif menu == "10. Recepção e Triagem":
                         if f_cpf.startswith("SEMCPF"):
                             supabase.table("pacientes").insert(ficha).execute()
                         else:
-                            supabase.table("pacientes") \
-                                .upsert(ficha, on_conflict="cpf") \
-                                .execute()
+                            supabase.table("pacientes").upsert(ficha, on_conflict="cpf").execute()
 
                         atend = {
                             "paciente": f_nome.upper(),
