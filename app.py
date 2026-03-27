@@ -41,7 +41,8 @@ menu = st.sidebar.radio("Navegação", [
     "9. Gestão de Especialidades",
     "10. Recepção e Triagem",
     "11. Prontuário Médico",
-    "12. Caixa"
+    "12. Caixa",
+    "13. Convênios"
   
     
 ], index=2)
@@ -1492,3 +1493,130 @@ elif menu == "12. Caixa":
 
         except Exception as e:
             st.error(f"Erro ao carregar caixa: {e}")
+
+
+
+
+
+
+
+
+
+
+# ==========================================================
+# TELA 13: CADASTRO DE CONVÊNIOS
+# ==========================================================
+
+elif menu == "13. Convênios":
+
+    if verificar_senha():
+
+        st.title("🏥 Cadastro de Convênios")
+        st.markdown("---")
+
+        # ======================================================
+        # FORMULÁRIO
+        # ======================================================
+        with st.form("form_convenio"):
+
+            c1, c2 = st.columns(2)
+
+            nome = c1.text_input("Nome do Convênio")
+            telefone = c2.text_input("Telefone")
+
+            email = st.text_input("Email")
+            observacao = st.text_area("Observação")
+
+            submitted = st.form_submit_button("💾 Salvar")
+
+            if submitted:
+
+                if not nome:
+                    st.error("⚠️ Informe o nome do convênio")
+
+                else:
+                    try:
+                        supabase.table("convenios").insert({
+                            "nome": nome.upper(),
+                            "telefone": telefone,
+                            "email": email,
+                            "observacao": observacao
+                        }).execute()
+
+                        st.success("✅ Convênio cadastrado com sucesso")
+
+                    except Exception as e:
+                        st.error(f"❌ Erro: {e}")
+
+        st.markdown("---")
+
+        # ======================================================
+        # LISTAGEM
+        # ======================================================
+        try:
+            res = supabase.table("convenios") \
+                .select("*") \
+                .order("nome") \
+                .execute()
+
+            if res.data:
+
+                df = pd.DataFrame(res.data)
+
+                df_view = df[["nome", "telefone", "email"]]
+
+                st.dataframe(df_view, use_container_width=True)
+
+                st.markdown("### ✏️ Editar / Excluir")
+
+                convenio_sel = st.selectbox(
+                    "Selecionar Convênio",
+                    df["nome"].tolist()
+                )
+
+                convenio_data = df[df["nome"] == convenio_sel].iloc[0]
+
+                c1, c2 = st.columns(2)
+
+                novo_nome = c1.text_input("Nome", value=convenio_data["nome"])
+                novo_tel = c2.text_input("Telefone", value=convenio_data["telefone"])
+
+                novo_email = st.text_input("Email", value=convenio_data["email"])
+                nova_obs = st.text_area("Observação", value=convenio_data["observacao"])
+
+                colb1, colb2 = st.columns(2)
+
+                if colb1.button("💾 Atualizar"):
+                    try:
+                        supabase.table("convenios") \
+                            .update({
+                                "nome": novo_nome.upper(),
+                                "telefone": novo_tel,
+                                "email": novo_email,
+                                "observacao": nova_obs
+                            }) \
+                            .eq("id", convenio_data["id"]) \
+                            .execute()
+
+                        st.success("Atualizado com sucesso")
+
+                    except Exception as e:
+                        st.error(f"Erro: {e}")
+
+                if colb2.button("🗑️ Excluir"):
+                    try:
+                        supabase.table("convenios") \
+                            .delete() \
+                            .eq("id", convenio_data["id"]) \
+                            .execute()
+
+                        st.success("Excluído com sucesso")
+
+                    except Exception as e:
+                        st.error(f"Erro: {e}")
+
+            else:
+                st.info("Nenhum convênio cadastrado")
+
+        except Exception as e:
+            st.error(f"Erro ao carregar convênios: {e}")
