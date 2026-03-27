@@ -808,8 +808,9 @@ if navegador == "9. Gestão de Especialidades":
 
 
 
+
 # ==========================================================
-# TELA 10: RECEPÇÃO E TRIAGEM (VERSÃO FINAL DEFINITIVA)
+# TELA 10: RECEPÇÃO E TRIAGEM (COM CAMPO OBSERVAÇÃO)
 # ==========================================================
 
 elif menu == "10. Recepção e Triagem":
@@ -820,9 +821,6 @@ elif menu == "10. Recepção e Triagem":
         st.caption("Pacientes agendados para HOJE")
         st.markdown("---")
 
-        # ==========================================================
-        # 1. UNIDADE
-        # ==========================================================
         unidades_disponiveis = [
             "Pç 7 Rua Carijos 424 SL 2213",
             "Pç 7 Rua Rio de Janeiro 462 SL 303",
@@ -833,13 +831,12 @@ elif menu == "10. Recepção e Triagem":
         u_trabalho = st.selectbox("📍 Unidade:", unidades_disponiveis)
 
         # ==========================================================
-        # 2. AGENDA HOJE
+        # AGENDA HOJE
         # ==========================================================
         lista_pacientes_unidade = []
         mapa_pacientes = {}
 
         try:
-
             res_agenda = supabase.table("CONSULTAS") \
                 .select("*") \
                 .eq("status", "Marcada") \
@@ -884,7 +881,7 @@ elif menu == "10. Recepção e Triagem":
             st.error(f"Erro ao carregar agenda: {e}")
 
         # ==========================================================
-        # 3. BUSCA
+        # BUSCA
         # ==========================================================
         col1, col2, col3 = st.columns(3)
 
@@ -914,7 +911,7 @@ elif menu == "10. Recepção e Triagem":
         dados_carregados = {}
 
         # ==========================================================
-        # 4. CONSULTA PACIENTE
+        # CONSULTA PACIENTE
         # ==========================================================
         try:
 
@@ -965,7 +962,7 @@ elif menu == "10. Recepção e Triagem":
             st.error(f"Erro ao buscar paciente: {e}")
 
         # ==========================================================
-        # 5. FORMULÁRIO
+        # FORMULÁRIO
         # ==========================================================
         st.markdown("---")
 
@@ -1015,7 +1012,7 @@ elif menu == "10. Recepção e Triagem":
             f_email = c6.text_input("Email", value=dados_carregados.get("email", ""))
 
             # ==========================================================
-            # ENDEREÇO COMPLETO (MANTIDO)
+            # ENDEREÇO
             # ==========================================================
             st.subheader("Endereço")
 
@@ -1032,10 +1029,15 @@ elif menu == "10. Recepção e Triagem":
             f_cid = ce6.text_input("Cidade", value=dados_carregados.get("cidade", "Belo Horizonte"))
             f_uf = ce7.text_input("UF", value=dados_carregados.get("uf", "MG"))
 
+            # ==========================================================
+            # NOVO CAMPO OBSERVAÇÃO
+            # ==========================================================
+            f_obs = st.text_area("📝 Observação", value=dados_carregados.get("observacao", ""))
+
             submitted = st.form_submit_button("🚀 Finalizar Check-in")
 
             # ==========================================================
-            # 6. PROCESSAMENTO
+            # PROCESSAMENTO
             # ==========================================================
             if submitted:
 
@@ -1060,7 +1062,8 @@ elif menu == "10. Recepção e Triagem":
                             "complemento": f_comp,
                             "bairro": f_bairro,
                             "cidade": f_cid,
-                            "uf": f_uf.upper()
+                            "uf": f_uf.upper(),
+                            "observacao": f_obs  # ✅ NOVO CAMPO
                         }
 
                         supabase.table("pacientes").upsert(
@@ -1083,6 +1086,8 @@ elif menu == "10. Recepção e Triagem":
 
                     except Exception as e:
                         st.error(f"❌ Erro: {e}")
+
+
 
 
 
