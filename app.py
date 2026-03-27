@@ -1317,9 +1317,8 @@ if menu == "11. Prontuário Médico":
 
 
 
-
 # ==========================================================
-# TELA 12: CAIXA INTELIGENTE (FINAL COM MÉDICO NOME)
+# TELA 12: CAIXA INTELIGENTE (MÉDICO VIA CONSULTAS)
 # ==========================================================
 
 elif menu == "12. Caixa":
@@ -1362,14 +1361,17 @@ elif menu == "12. Caixa":
             pass
 
         # ==========================================================
-        # MÉDICOS (COM NOME)
+        # MÉDICOS DIRETO DA CONSULTAS (SEM SQL)
         # ==========================================================
         lista_medicos = []
         try:
-            res_m = supabase.table("medicos").select("nome").execute()
+            res_m = supabase.table("CONSULTAS").select("medico").execute()
+
             if res_m.data:
+                df_m = pd.DataFrame(res_m.data)
+
                 lista_medicos = sorted(
-                    list(set([m["nome"] for m in res_m.data if m["nome"]]))
+                    df_m["medico"].dropna().astype(str).unique().tolist()
                 )
         except:
             pass
@@ -1399,7 +1401,7 @@ elif menu == "12. Caixa":
             )
 
             # ======================================================
-            # VALORES (CAMPO MENOR)
+            # VALORES
             # ======================================================
             col_valor1, col_valor2 = st.columns([1,1])
 
