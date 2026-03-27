@@ -1081,8 +1081,9 @@ elif menu == "10. Recepção e Triagem":
 
 
 
+
 # ==========================================================
-# TELA: PRONTUÁRIO MÉDICO (COM AGENDA DO DIA)
+# TELA: PRONTUÁRIO MÉDICO (COM AGENDA CORRIGIDA)
 # ==========================================================
 if menu == "11. Prontuário Médico":
     if verificar_senha():
@@ -1123,7 +1124,7 @@ if menu == "11. Prontuário Médico":
             )
 
             # ==========================================================
-            # UNIDADE E MÉDICO (OBRIGATÓRIO)
+            # UNIDADE E MÉDICO
             # ==========================================================
             unidades = [
                 "Selecione...",
@@ -1135,15 +1136,20 @@ if menu == "11. Prontuário Médico":
 
             try:
                 res_med = supabase.table("MEDICOS")\
-                    .select("nome")\
+                    .select("id, nome")\
                     .execute()
 
-                lista_medicos = ["Selecione..."] + [
-                    m["nome"] for m in res_med.data
-                ] if res_med.data else ["Selecione..."]
+                lista_medicos = ["Selecione..."]
+                mapa_medicos = {}
+
+                if res_med.data:
+                    for m in res_med.data:
+                        lista_medicos.append(m["nome"])
+                        mapa_medicos[m["nome"]] = m["id"]
 
             except:
                 lista_medicos = ["Selecione..."]
+                mapa_medicos = {}
 
             col1, col2 = st.columns(2)
 
@@ -1162,7 +1168,7 @@ if menu == "11. Prontuário Médico":
             )
 
             # ==========================================================
-            # 📅 AGENDA DO DIA DO MÉDICO
+            # 📅 AGENDA DO DIA (CORRIGIDA COM medico_id)
             # ==========================================================
             if medico_atual != "Selecione...":
 
@@ -1172,37 +1178,42 @@ if menu == "11. Prontuário Médico":
                 try:
                     hoje = dt_lib.datetime.now().strftime("%Y-%m-%d")
 
-                    res_agenda = supabase.table("CONSULTAS")\
-                        .select("*")\
-                        .eq("medico", medico_atual)\
-                        .gte("data_hora", f"{hoje}T00:00:00")\
-                        .lte("data_hora", f"{hoje}T23:59:59")\
-                        .order("data_hora")\
-                        .execute()
+                    medico_id = mapa_medicos.get(medico_atual)
 
-                    agenda = res_agenda.data
-
-                    if agenda:
-                        lista_agenda = []
-
-                        for a in agenda:
-                            try:
-                                dt_ag = pd.to_datetime(a.get("data_hora"))
-                            except:
-                                continue
-
-                            lista_agenda.append({
-                                "Hora": dt_ag.strftime("%H:%M"),
-                                "Paciente": a.get("paciente_nome"),
-                                "Status": a.get("status")
-                            })
-
-                        df_agenda = pd.DataFrame(lista_agenda)
-
-                        st.dataframe(df_agenda, use_container_width=True)
-
+                    if not medico_id:
+                        st.warning("Médico não encontrado.")
                     else:
-                        st.info("Sem agenda para hoje.")
+                        res_agenda = supabase.table("CONSULTAS")\
+                            .select("*")\
+                            .eq("medico_id", medico_id)\
+                            .gte("data_hora", f"{hoje}T00:00:00")\
+                            .lte("data_hora", f"{hoje}T23:59:59")\
+                            .order("data_hora")\
+                            .execute()
+
+                        agenda = res_agenda.data
+
+                        if agenda:
+                            lista_agenda = []
+
+                            for a in agenda:
+                                try:
+                                    dt_ag = pd.to_datetime(a.get("data_hora"))
+                                except:
+                                    continue
+
+                                lista_agenda.append({
+                                    "Hora": dt_ag.strftime("%H:%M"),
+                                    "Paciente": a.get("paciente_nome"),
+                                    "Status": a.get("status")
+                                })
+
+                            df_agenda = pd.DataFrame(lista_agenda)
+
+                            st.dataframe(df_agenda, use_container_width=True)
+
+                        else:
+                            st.info("Sem agenda para hoje.")
 
                 except Exception as e:
                     st.error(f"Erro ao carregar agenda: {e}")
@@ -1220,6 +1231,7 @@ if menu == "11. Prontuário Médico":
             # HISTÓRICO
             # ==========================================================
             if st.button("📖 Consultar Prontuário"):
+
                 try:
                     res_hist = supabase.table("atendimentos")\
                         .select("*")\
@@ -1247,7 +1259,7 @@ if menu == "11. Prontuário Médico":
             st.markdown("---")
 
             # ==========================================================
-            # FORMULÁRIO
+            # FORMULÁRIO MÉDICO
             # ==========================================================
             with st.form("form_prontuario"):
 
@@ -1290,8 +1302,6 @@ if menu == "11. Prontuário Médico":
 
                         except Exception as e:
                             st.error(f"❌ Erro ao salvar prontuário: {e}")
-
-
 
 
 
