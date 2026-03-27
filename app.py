@@ -809,7 +809,7 @@ if navegador == "9. Gestão de Especialidades":
 
 
 # ==========================================================
-# TELA 10: RECEPÇÃO E TRIAGEM (VERSÃO FINAL COM ENDEREÇO)
+# TELA 10: RECEPÇÃO E TRIAGEM (VERSÃO FINAL AJUSTADA DATA)
 # ==========================================================
 
 elif menu == "10. Recepção e Triagem":
@@ -821,7 +821,7 @@ elif menu == "10. Recepção e Triagem":
         st.markdown("---")
 
         # ==========================================================
-        # 1. UNIDADE (LOCAL)
+        # 1. UNIDADE
         # ==========================================================
         unidades_disponiveis = [
             "Pç 7 Rua Carijos 424 SL 2213",
@@ -833,7 +833,7 @@ elif menu == "10. Recepção e Triagem":
         u_trabalho = st.selectbox("📍 Unidade:", unidades_disponiveis)
 
         # ==========================================================
-        # 2. BUSCA AGENDA (FILTRO REAL DE HOJE)
+        # 2. AGENDA HOJE
         # ==========================================================
         lista_pacientes_unidade = []
         mapa_pacientes = {}
@@ -854,13 +854,11 @@ elif menu == "10. Recepção e Triagem":
                     hoje = dt_lib.datetime.now().date()
                     df_ag = df_ag[df_ag["data_hora"].dt.date == hoje]
 
-                colunas = df_ag.columns
-
-                if "unidade" in colunas:
+                if "unidade" in df_ag.columns:
                     df_ag = df_ag[df_ag["unidade"] == u_trabalho]
-                elif "clinica" in colunas:
+                elif "clinica" in df_ag.columns:
                     df_ag = df_ag[df_ag["clinica"] == u_trabalho]
-                elif "local" in colunas:
+                elif "local" in df_ag.columns:
                     df_ag = df_ag[df_ag["local"] == u_trabalho]
 
                 if len(df_ag) > 0:
@@ -886,7 +884,7 @@ elif menu == "10. Recepção e Triagem":
             st.error(f"Erro ao carregar agenda: {e}")
 
         # ==========================================================
-        # 3. BUSCA PACIENTE
+        # 3. BUSCA
         # ==========================================================
         col1, col2, col3 = st.columns(3)
 
@@ -907,7 +905,7 @@ elif menu == "10. Recepção e Triagem":
         if usar_data:
             data_busca = st.date_input(
                 "📅 Nascimento",
-                value=dt_lib.date(2000, 1, 1),
+                value=dt_lib.date(1900, 1, 1),  # ✅ AJUSTE AQUI
                 format="DD/MM/YYYY"
             )
 
@@ -965,7 +963,7 @@ elif menu == "10. Recepção e Triagem":
             st.error(f"Erro ao buscar paciente: {e}")
 
         # ==========================================================
-        # 5. FORMULÁRIO (COM ENDEREÇO COMPLETO)
+        # 5. FORMULÁRIO
         # ==========================================================
         st.markdown("---")
 
@@ -988,7 +986,7 @@ elif menu == "10. Recepção e Triagem":
 
             f_nasc = c3.date_input(
                 "Nascimento",
-                value=dt_lib.date(2000, 1, 1),
+                value=dt_lib.date(1900, 1, 1),  # ✅ AJUSTE AQUI
                 format="DD/MM/YYYY"
             )
 
@@ -1010,14 +1008,8 @@ elif menu == "10. Recepção e Triagem":
                 )
             )
 
-            f_email = c6.text_input(
-                "Email",
-                value=dados_carregados.get("email", "")
-            )
+            f_email = c6.text_input("Email", value=dados_carregados.get("email", ""))
 
-            # ==============================
-            # 🔥 ENDEREÇO COMPLETO (RESTAURADO)
-            # ==============================
             st.subheader("Endereço")
 
             ce1, ce2 = st.columns([1, 4])
@@ -1035,9 +1027,6 @@ elif menu == "10. Recepção e Triagem":
 
             submitted = st.form_submit_button("🚀 Finalizar Check-in")
 
-            # ==========================================================
-            # 6. PROCESSAMENTO
-            # ==========================================================
             if submitted:
 
                 if not f_nome:
@@ -1064,10 +1053,7 @@ elif menu == "10. Recepção e Triagem":
                             "uf": f_uf.upper()
                         }
 
-                        supabase.table("pacientes").upsert(
-                            ficha,
-                            on_conflict="cpf"
-                        ).execute()
+                        supabase.table("pacientes").upsert(ficha, on_conflict="cpf").execute()
 
                         atend = {
                             "paciente": f_nome.upper(),
@@ -1084,6 +1070,7 @@ elif menu == "10. Recepção e Triagem":
 
                     except Exception as e:
                         st.error(f"❌ Erro: {e}")
+
 
 
 
