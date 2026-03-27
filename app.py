@@ -845,9 +845,8 @@ if navegador == "9. Gestão de Especialidades":
 
 
 
-
 # ==========================================================
-# TELA 10: RECEPÇÃO E TRIAGEM (VERSÃO FINAL INTELIGENTE)
+# TELA 10: RECEPÇÃO E TRIAGEM (VERSÃO BLINDADA)
 # ==========================================================
 
 elif menu == "10. Recepção e Triagem":
@@ -855,11 +854,11 @@ elif menu == "10. Recepção e Triagem":
     if verificar_senha():
 
         st.title("🛎️ Recepção - Check-in Inteligente")
-        st.caption("Filtre por unidade para visualizar os agendamentos do dia.")
+        st.caption("Agendamentos do dia com preenchimento automático")
         st.markdown("---")
 
         # ==========================================================
-        # 1. UNIDADE
+        # 1. UNIDADE (USO LOCAL - NÃO DEPENDE DO BANCO)
         # ==========================================================
         unidades_disponiveis = [
             "Pç 7 Rua Carijos 424 SL 2213",
@@ -871,7 +870,7 @@ elif menu == "10. Recepção e Triagem":
         u_trabalho = st.selectbox("📍 Unidade:", unidades_disponiveis)
 
         # ==========================================================
-        # 2. AGENDA (FILTRO CORRETO)
+        # 2. BUSCA AGENDA (SEM DEPENDER DE COLUNA UNIDADE)
         # ==========================================================
         hoje = dt_lib.datetime.now().date().isoformat()
         inicio_dia = f"{hoje}T00:00:00"
@@ -881,10 +880,10 @@ elif menu == "10. Recepção e Triagem":
         mapa_pacientes = {}
 
         try:
+
             res_agenda = supabase.table("CONSULTAS") \
                 .select("*") \
                 .eq("status", "Marcada") \
-                .eq("unidade", u_trabalho) \
                 .gte("data_hora", inicio_dia) \
                 .lte("data_hora", fim_dia) \
                 .execute()
@@ -893,6 +892,25 @@ elif menu == "10. Recepção e Triagem":
 
                 df_ag = pd.DataFrame(res_agenda.data)
 
+                # ==================================================
+                # FILTRO INTELIGENTE DE UNIDADE (SE EXISTIR)
+                # ==================================================
+                colunas = df_ag.columns
+
+                if "unidade" in colunas:
+                    df_ag = df_ag[df_ag["unidade"] == u_trabalho]
+
+                elif "clinica" in colunas:
+                    df_ag = df_ag[df_ag["clinica"] == u_trabalho]
+
+                elif "local" in colunas:
+                    df_ag = df_ag[df_ag["local"] == u_trabalho]
+
+                # se não tiver nenhuma coluna → não filtra (evita erro)
+
+                # ==================================================
+                # MONTA LISTA DE PACIENTES
+                # ==================================================
                 df_ag["display"] = (
                     df_ag["paciente_nome"].fillna("").str.upper() + " " +
                     df_ag["paciente_sobrenome"].fillna("").str.upper()
@@ -920,7 +938,7 @@ elif menu == "10. Recepção e Triagem":
 
         with col1:
             paciente_agendado = st.selectbox(
-                f"👥 Pacientes de Hoje ({u_trabalho})",
+                "👥 Pacientes de Hoje",
                 ["-- Selecione --"] + lista_pacientes_unidade
             )
 
@@ -942,7 +960,7 @@ elif menu == "10. Recepção e Triagem":
         dados_carregados = {}
 
         # ==========================================================
-        # 4. BUSCA BANCO
+        # 4. BUSCA PACIENTE
         # ==========================================================
         try:
 
@@ -1040,21 +1058,6 @@ elif menu == "10. Recepção e Triagem":
 
             f_email = c6.text_input("Email", value=dados_carregados.get("email", ""))
 
-            st.subheader("Endereço")
-
-            ce1, ce2 = st.columns([1, 4])
-            f_cep = ce1.text_input("CEP")
-            f_rua = ce2.text_input("Rua")
-
-            ce3, ce4 = st.columns([1, 3])
-            f_num = ce3.text_input("Número")
-            f_comp = ce4.text_input("Complemento")
-
-            ce5, ce6, ce7 = st.columns([2, 2, 1])
-            f_bairro = ce5.text_input("Bairro")
-            f_cid = ce6.text_input("Cidade", value="Belo Horizonte")
-            f_uf = ce7.text_input("UF", value="MG")
-
             submitted = st.form_submit_button("🚀 Finalizar Check-in")
 
             # ==========================================================
@@ -1076,20 +1079,10 @@ elif menu == "10. Recepção e Triagem":
                             "data_nascimento": f_nasc.isoformat(),
                             "telefone": f_tel,
                             "convenio": f_conv.upper(),
-                            "email": f_email.lower(),
-                            "cep": f_cep,
-                            "rua": f_rua,
-                            "numero": f_num,
-                            "complemento": f_comp,
-                            "bairro": f_bairro,
-                            "cidade": f_cid,
-                            "uf": f_uf.upper()
+                            "email": f_email.lower()
                         }
 
-                        if f_cpf.startswith("SEMCPF"):
-                            supabase.table("pacientes").insert(ficha).execute()
-                        else:
-                            supabase.table("pacientes").upsert(ficha, on_conflict="cpf").execute()
+                        supabase.table("pacientes").upsert(ficha, on_conflict="cpf").execute()
 
                         atend = {
                             "paciente": f_nome.upper(),
@@ -1097,16 +1090,16 @@ elif menu == "10. Recepção e Triagem":
                             "status": "Aguardando",
                             "unidade": u_trabalho,
                             "medico": "A DEFINIR",
-                            "triagem": f"NASC: {f_nasc.strftime('%d/%m/%Y')} | TEL: {f_tel}",
                             "data_hora": dt_lib.datetime.now().isoformat()
                         }
 
                         supabase.table("atendimentos").insert(atend).execute()
 
-                        st.success("✅ Check-in salvo para prontuário médico com sucesso")
+                        st.success("✅ Check-in realizado com sucesso")
 
                     except Exception as e:
                         st.error(f"❌ Erro: {e}")
+
 
 
 
