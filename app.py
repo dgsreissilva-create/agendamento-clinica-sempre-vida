@@ -809,7 +809,7 @@ if navegador == "9. Gestão de Especialidades":
 
 
 # ==========================================================
-# TELA 10: RECEPÇÃO E TRIAGEM (VERSÃO FINAL AJUSTADA DATA)
+# TELA 10: RECEPÇÃO E TRIAGEM (VERSÃO FINAL DEFINITIVA)
 # ==========================================================
 
 elif menu == "10. Recepção e Triagem":
@@ -905,7 +905,9 @@ elif menu == "10. Recepção e Triagem":
         if usar_data:
             data_busca = st.date_input(
                 "📅 Nascimento",
-                value=dt_lib.date(1900, 1, 1),  # ✅ AJUSTE AQUI
+                value=dt_lib.date(1900, 1, 1),
+                min_value=dt_lib.date(1900, 1, 1),
+                max_value=dt_lib.date.today(),
                 format="DD/MM/YYYY"
             )
 
@@ -986,7 +988,9 @@ elif menu == "10. Recepção e Triagem":
 
             f_nasc = c3.date_input(
                 "Nascimento",
-                value=dt_lib.date(1900, 1, 1),  # ✅ AJUSTE AQUI
+                value=dt_lib.date(1900, 1, 1),
+                min_value=dt_lib.date(1900, 1, 1),
+                max_value=dt_lib.date.today(),
                 format="DD/MM/YYYY"
             )
 
@@ -1010,6 +1014,9 @@ elif menu == "10. Recepção e Triagem":
 
             f_email = c6.text_input("Email", value=dados_carregados.get("email", ""))
 
+            # ==========================================================
+            # ENDEREÇO COMPLETO (MANTIDO)
+            # ==========================================================
             st.subheader("Endereço")
 
             ce1, ce2 = st.columns([1, 4])
@@ -1027,6 +1034,9 @@ elif menu == "10. Recepção e Triagem":
 
             submitted = st.form_submit_button("🚀 Finalizar Check-in")
 
+            # ==========================================================
+            # 6. PROCESSAMENTO
+            # ==========================================================
             if submitted:
 
                 if not f_nome:
@@ -1053,7 +1063,10 @@ elif menu == "10. Recepção e Triagem":
                             "uf": f_uf.upper()
                         }
 
-                        supabase.table("pacientes").upsert(ficha, on_conflict="cpf").execute()
+                        supabase.table("pacientes").upsert(
+                            ficha,
+                            on_conflict="cpf"
+                        ).execute()
 
                         atend = {
                             "paciente": f_nome.upper(),
@@ -1070,8 +1083,6 @@ elif menu == "10. Recepção e Triagem":
 
                     except Exception as e:
                         st.error(f"❌ Erro: {e}")
-
-
 
 
 
