@@ -844,9 +844,8 @@ if navegador == "9. Gestão de Especialidades":
 
 
 
-
 # ==========================================================
-# TELA 10: RECEPÇÃO E TRIAGEM (VERSÃO BLINDADA)
+# TELA 10: RECEPÇÃO E TRIAGEM (VERSÃO FINAL CORRIGIDA)
 # ==========================================================
 
 elif menu == "10. Recepção e Triagem":
@@ -854,11 +853,11 @@ elif menu == "10. Recepção e Triagem":
     if verificar_senha():
 
         st.title("🛎️ Recepção - Check-in Inteligente")
-        st.caption("Agendamentos do dia com preenchimento automático")
+        st.caption("Pacientes agendados para HOJE")
         st.markdown("---")
 
         # ==========================================================
-        # 1. UNIDADE (USO LOCAL - NÃO DEPENDE DO BANCO)
+        # 1. UNIDADE (LOCAL)
         # ==========================================================
         unidades_disponiveis = [
             "Pç 7 Rua Carijos 424 SL 2213",
@@ -870,12 +869,8 @@ elif menu == "10. Recepção e Triagem":
         u_trabalho = st.selectbox("📍 Unidade:", unidades_disponiveis)
 
         # ==========================================================
-        # 2. BUSCA AGENDA (SEM DEPENDER DE COLUNA UNIDADE)
+        # 2. BUSCA AGENDA (FILTRO REAL DE HOJE)
         # ==========================================================
-        hoje = dt_lib.datetime.now().date().isoformat()
-        inicio_dia = f"{hoje}T00:00:00"
-        fim_dia = f"{hoje}T23:59:59"
-
         lista_pacientes_unidade = []
         mapa_pacientes = {}
 
@@ -884,17 +879,31 @@ elif menu == "10. Recepção e Triagem":
             res_agenda = supabase.table("CONSULTAS") \
                 .select("*") \
                 .eq("status", "Marcada") \
-                .gte("data_hora", inicio_dia) \
-                .lte("data_hora", fim_dia) \
                 .execute()
 
             if res_agenda.data:
 
                 df_ag = pd.DataFrame(res_agenda.data)
 
-                # ==================================================
-                # FILTRO INTELIGENTE DE UNIDADE (SE EXISTIR)
-                # ==================================================
+                # ------------------------------
+                # CONVERTE DATA
+                # ------------------------------
+                if "data_hora" in df_ag.columns:
+
+                    df_ag["data_hora"] = pd.to_datetime(
+                        df_ag["data_hora"],
+                        errors="coerce"
+                    )
+
+                    hoje = dt_lib.datetime.now().date()
+
+                    df_ag = df_ag[
+                        df_ag["data_hora"].dt.date == hoje
+                    ]
+
+                # ------------------------------
+                # FILTRO DE UNIDADE (SE EXISTIR)
+                # ------------------------------
                 colunas = df_ag.columns
 
                 if "unidade" in colunas:
@@ -906,33 +915,33 @@ elif menu == "10. Recepção e Triagem":
                 elif "local" in colunas:
                     df_ag = df_ag[df_ag["local"] == u_trabalho]
 
-                # se não tiver nenhuma coluna → não filtra (evita erro)
+                # ------------------------------
+                # MONTA LISTA
+                # ------------------------------
+                if len(df_ag) > 0:
 
-                # ==================================================
-                # MONTA LISTA DE PACIENTES
-                # ==================================================
-                df_ag["display"] = (
-                    df_ag["paciente_nome"].fillna("").str.upper() + " " +
-                    df_ag["paciente_sobrenome"].fillna("").str.upper()
-                )
+                    df_ag["display"] = (
+                        df_ag["paciente_nome"].fillna("").str.upper() + " " +
+                        df_ag["paciente_sobrenome"].fillna("").str.upper()
+                    )
 
-                for _, row in df_ag.iterrows():
+                    for _, row in df_ag.iterrows():
 
-                    nome_display = row["display"].strip()
+                        nome_display = row["display"].strip()
 
-                    mapa_pacientes[nome_display] = {
-                        "nome": row.get("paciente_nome", ""),
-                        "telefone": row.get("paciente_telefone", ""),
-                        "convenio": row.get("paciente_convenio", "")
-                    }
+                        mapa_pacientes[nome_display] = {
+                            "nome": row.get("paciente_nome", ""),
+                            "telefone": row.get("paciente_telefone", ""),
+                            "convenio": row.get("paciente_convenio", "")
+                        }
 
-                lista_pacientes_unidade = sorted(mapa_pacientes.keys())
+                    lista_pacientes_unidade = sorted(mapa_pacientes.keys())
 
         except Exception as e:
             st.error(f"Erro ao carregar agenda: {e}")
 
         # ==========================================================
-        # 3. BUSCA
+        # 3. BUSCA PACIENTE
         # ==========================================================
         col1, col2, col3 = st.columns(3)
 
@@ -960,7 +969,7 @@ elif menu == "10. Recepção e Triagem":
         dados_carregados = {}
 
         # ==========================================================
-        # 4. BUSCA PACIENTE
+        # 4. CONSULTA PACIENTE
         # ==========================================================
         try:
 
@@ -1056,12 +1065,15 @@ elif menu == "10. Recepção e Triagem":
                 )
             )
 
-            f_email = c6.text_input("Email", value=dados_carregados.get("email", ""))
+            f_email = c6.text_input(
+                "Email",
+                value=dados_carregados.get("email", "")
+            )
 
             submitted = st.form_submit_button("🚀 Finalizar Check-in")
 
             # ==========================================================
-            # PROCESSAMENTO
+            # 6. PROCESSAMENTO
             # ==========================================================
             if submitted:
 
@@ -1082,7 +1094,10 @@ elif menu == "10. Recepção e Triagem":
                             "email": f_email.lower()
                         }
 
-                        supabase.table("pacientes").upsert(ficha, on_conflict="cpf").execute()
+                        supabase.table("pacientes").upsert(
+                            ficha,
+                            on_conflict="cpf"
+                        ).execute()
 
                         atend = {
                             "paciente": f_nome.upper(),
@@ -1099,7 +1114,6 @@ elif menu == "10. Recepção e Triagem":
 
                     except Exception as e:
                         st.error(f"❌ Erro: {e}")
-
 
 
 
