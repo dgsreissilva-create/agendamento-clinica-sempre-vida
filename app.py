@@ -807,8 +807,9 @@ if navegador == "9. Gestão de Especialidades":
 
 
 
+
 # ==========================================================
-# TELA 10: RECEPÇÃO E TRIAGEM (VERSÃO FINAL CORRIGIDA)
+# TELA 10: RECEPÇÃO E TRIAGEM (VERSÃO FINAL COM ENDEREÇO)
 # ==========================================================
 
 elif menu == "10. Recepção e Triagem":
@@ -848,39 +849,20 @@ elif menu == "10. Recepção e Triagem":
 
                 df_ag = pd.DataFrame(res_agenda.data)
 
-                # ------------------------------
-                # CONVERTE DATA
-                # ------------------------------
                 if "data_hora" in df_ag.columns:
-
-                    df_ag["data_hora"] = pd.to_datetime(
-                        df_ag["data_hora"],
-                        errors="coerce"
-                    )
-
+                    df_ag["data_hora"] = pd.to_datetime(df_ag["data_hora"], errors="coerce")
                     hoje = dt_lib.datetime.now().date()
+                    df_ag = df_ag[df_ag["data_hora"].dt.date == hoje]
 
-                    df_ag = df_ag[
-                        df_ag["data_hora"].dt.date == hoje
-                    ]
-
-                # ------------------------------
-                # FILTRO DE UNIDADE (SE EXISTIR)
-                # ------------------------------
                 colunas = df_ag.columns
 
                 if "unidade" in colunas:
                     df_ag = df_ag[df_ag["unidade"] == u_trabalho]
-
                 elif "clinica" in colunas:
                     df_ag = df_ag[df_ag["clinica"] == u_trabalho]
-
                 elif "local" in colunas:
                     df_ag = df_ag[df_ag["local"] == u_trabalho]
 
-                # ------------------------------
-                # MONTA LISTA
-                # ------------------------------
                 if len(df_ag) > 0:
 
                     df_ag["display"] = (
@@ -983,7 +965,7 @@ elif menu == "10. Recepção e Triagem":
             st.error(f"Erro ao buscar paciente: {e}")
 
         # ==========================================================
-        # 5. FORMULÁRIO
+        # 5. FORMULÁRIO (COM ENDEREÇO COMPLETO)
         # ==========================================================
         st.markdown("---")
 
@@ -1033,6 +1015,24 @@ elif menu == "10. Recepção e Triagem":
                 value=dados_carregados.get("email", "")
             )
 
+            # ==============================
+            # 🔥 ENDEREÇO COMPLETO (RESTAURADO)
+            # ==============================
+            st.subheader("Endereço")
+
+            ce1, ce2 = st.columns([1, 4])
+            f_cep = ce1.text_input("CEP", value=dados_carregados.get("cep", ""))
+            f_rua = ce2.text_input("Rua", value=dados_carregados.get("rua", ""))
+
+            ce3, ce4 = st.columns([1, 3])
+            f_num = ce3.text_input("Número", value=dados_carregados.get("numero", ""))
+            f_comp = ce4.text_input("Complemento", value=dados_carregados.get("complemento", ""))
+
+            ce5, ce6, ce7 = st.columns([2, 2, 1])
+            f_bairro = ce5.text_input("Bairro", value=dados_carregados.get("bairro", ""))
+            f_cid = ce6.text_input("Cidade", value=dados_carregados.get("cidade", "Belo Horizonte"))
+            f_uf = ce7.text_input("UF", value=dados_carregados.get("uf", "MG"))
+
             submitted = st.form_submit_button("🚀 Finalizar Check-in")
 
             # ==========================================================
@@ -1054,7 +1054,14 @@ elif menu == "10. Recepção e Triagem":
                             "data_nascimento": f_nasc.isoformat(),
                             "telefone": f_tel,
                             "convenio": f_conv.upper(),
-                            "email": f_email.lower()
+                            "email": f_email.lower(),
+                            "cep": f_cep,
+                            "rua": f_rua,
+                            "numero": f_num,
+                            "complemento": f_comp,
+                            "bairro": f_bairro,
+                            "cidade": f_cid,
+                            "uf": f_uf.upper()
                         }
 
                         supabase.table("pacientes").upsert(
@@ -1077,7 +1084,6 @@ elif menu == "10. Recepção e Triagem":
 
                     except Exception as e:
                         st.error(f"❌ Erro: {e}")
-
 
 
 
