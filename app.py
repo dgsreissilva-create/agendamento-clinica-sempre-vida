@@ -1082,7 +1082,7 @@ elif menu == "10. Recepção e Triagem":
 
 
 # ==========================================================
-# TELA: PRONTUÁRIO MÉDICO (ATENDIMENTO) - FINAL DEFINITIVA
+# TELA: PRONTUÁRIO MÉDICO (COM AGENDA DO DIA)
 # ==========================================================
 if menu == "11. Prontuário Médico":
     if verificar_senha():
@@ -1110,15 +1110,12 @@ if menu == "11. Prontuário Médico":
         # 2. LISTA DE PACIENTES
         # ==========================================================
         if not pacientes_espera:
-            st.info("ℹ️ Não há pacientes aguardando atendimento no momento.")
+            st.info("ℹ️ Não há pacientes aguardando atendimento.")
         else:
 
             nomes_fila = [p.get('paciente', 'SEM NOME') for p in pacientes_espera]
 
-            p_escolhido = st.selectbox(
-                "Selecione o Paciente",
-                nomes_fila
-            )
+            p_escolhido = st.selectbox("Selecione o Paciente", nomes_fila)
 
             dados_atend = next(
                 item for item in pacientes_espera
@@ -1126,7 +1123,7 @@ if menu == "11. Prontuário Médico":
             )
 
             # ==========================================================
-            # SELEÇÃO OBRIGATÓRIA
+            # UNIDADE E MÉDICO (OBRIGATÓRIO)
             # ==========================================================
             unidades = [
                 "Selecione...",
@@ -1153,30 +1150,76 @@ if menu == "11. Prontuário Médico":
             unidade_atual = col1.selectbox(
                 "🏥 Unidade",
                 unidades,
-                index=unidades.index(dados_atend.get("unidade")) 
+                index=unidades.index(dados_atend.get("unidade"))
                 if dados_atend.get("unidade") in unidades else 0
             )
 
             medico_atual = col2.selectbox(
                 "👨‍⚕️ Médico",
                 lista_medicos,
-                index=lista_medicos.index(dados_atend.get("medico")) 
+                index=lista_medicos.index(dados_atend.get("medico"))
                 if dados_atend.get("medico") in lista_medicos else 0
             )
 
             # ==========================================================
+            # 📅 AGENDA DO DIA DO MÉDICO
+            # ==========================================================
+            if medico_atual != "Selecione...":
+
+                st.markdown("---")
+                st.subheader(f"📅 Agenda do Dia - Dr(a). {medico_atual}")
+
+                try:
+                    hoje = dt_lib.datetime.now().strftime("%Y-%m-%d")
+
+                    res_agenda = supabase.table("CONSULTAS")\
+                        .select("*")\
+                        .eq("medico", medico_atual)\
+                        .gte("data_hora", f"{hoje}T00:00:00")\
+                        .lte("data_hora", f"{hoje}T23:59:59")\
+                        .order("data_hora")\
+                        .execute()
+
+                    agenda = res_agenda.data
+
+                    if agenda:
+                        lista_agenda = []
+
+                        for a in agenda:
+                            try:
+                                dt_ag = pd.to_datetime(a.get("data_hora"))
+                            except:
+                                continue
+
+                            lista_agenda.append({
+                                "Hora": dt_ag.strftime("%H:%M"),
+                                "Paciente": a.get("paciente_nome"),
+                                "Status": a.get("status")
+                            })
+
+                        df_agenda = pd.DataFrame(lista_agenda)
+
+                        st.dataframe(df_agenda, use_container_width=True)
+
+                    else:
+                        st.info("Sem agenda para hoje.")
+
+                except Exception as e:
+                    st.error(f"Erro ao carregar agenda: {e}")
+
+            # ==========================================================
             # TRIAGEM
             # ==========================================================
+            st.markdown("---")
             triagem_txt = dados_atend.get('triagem', 'Sem dados de triagem')
             st.warning(f"**Dados de Triagem:** {triagem_txt}")
 
             st.markdown("---")
 
             # ==========================================================
-            # CONSULTAR PRONTUÁRIO
+            # HISTÓRICO
             # ==========================================================
             if st.button("📖 Consultar Prontuário"):
-
                 try:
                     res_hist = supabase.table("atendimentos")\
                         .select("*")\
@@ -1204,7 +1247,7 @@ if menu == "11. Prontuário Médico":
             st.markdown("---")
 
             # ==========================================================
-            # FORMULÁRIO MÉDICO
+            # FORMULÁRIO
             # ==========================================================
             with st.form("form_prontuario"):
 
@@ -1214,14 +1257,12 @@ if menu == "11. Prontuário Médico":
 
                 if st.form_submit_button("Finalizar Atendimento"):
 
-                    # VALIDAÇÕES
                     if unidade_atual == "Selecione..." or medico_atual == "Selecione...":
                         st.error("⚠️ Unidade e Médico são obrigatórios.")
                     elif not p_historico or not p_tratamento:
                         st.error("⚠️ Histórico e Tratamento são obrigatórios.")
                     else:
                         try:
-
                             agora = dt_lib.datetime.now()
                             data_br = agora.strftime("%d/%m/%Y")
                             hora_br = agora.strftime("%H:%M")
@@ -1245,13 +1286,10 @@ if menu == "11. Prontuário Médico":
                                 .eq("id", dados_atend.get('id'))\
                                 .execute()
 
-                            # ✅ MENSAGEM ABAIXO DO BOTÃO
                             st.success("✅ Prontuário salvo com sucesso")
 
                         except Exception as e:
                             st.error(f"❌ Erro ao salvar prontuário: {e}")
-
-
 
 
 
