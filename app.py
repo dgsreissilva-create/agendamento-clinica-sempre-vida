@@ -1314,8 +1314,12 @@ if menu == "11. Prontuário Médico":
 
 
 
+
+
+
+
 # ==========================================================
-# TELA 12: CAIXA INTELIGENTE (COM CONVÊNIO)
+# TELA 12: CAIXA INTELIGENTE (VERSÃO PROFISSIONAL)
 # ==========================================================
 
 elif menu == "12. Caixa":
@@ -1347,14 +1351,14 @@ elif menu == "12. Caixa":
         st.markdown("---")
 
         # ==========================================================
-        # BUSCAR CONVÊNIOS
+        # PACIENTES (AUTO DA TELA 10)
         # ==========================================================
-        lista_convenios = []
+        lista_pacientes = []
 
         try:
-            res_conv = supabase.table("convenios").select("*").execute()
-            if res_conv.data:
-                lista_convenios = [c['nome'] for c in res_conv.data]
+            res_p = supabase.table("pacientes").select("nome").execute()
+            if res_p.data:
+                lista_pacientes = sorted([p["nome"] for p in res_p.data])
         except:
             pass
 
@@ -1366,91 +1370,43 @@ elif menu == "12. Caixa":
             c1, c2, c3 = st.columns(3)
 
             tipo = c1.selectbox("Tipo", ["Entrada", "Saída"])
-            valor = c2.number_input("Valor R$", min_value=0.0, format="%.2f")
-            forma = c3.selectbox(
+
+            forma = c2.selectbox(
                 "Forma de Pagamento",
-                ["PIX", "Dinheiro", "Cartão", "Convênio", "Outro"]
+                ["PIX", "Dinheiro", "Cartão", "Convênio"]
             )
 
-            convenio_sel = None
-            descricao = ""
+            paciente = c3.selectbox(
+                "Paciente (opcional)",
+                [""] + lista_pacientes
+            )
+
+            valor = 0.0
+            faturado = 0.0
 
             # ======================================================
-            # CONVÊNIO (INTELIGENTE)
+            # REGRAS DE VALOR
             # ======================================================
-            if forma == "Convênio":
+            if forma in ["PIX", "Dinheiro", "Cartão"]:
+                valor = st.number_input("Valor R$", min_value=0.0, format="%.2f")
 
-                col_conv1, col_conv2 = st.columns(2)
+            elif forma == "Convênio":
+                faturado = st.number_input("Valor Faturado R$", min_value=0.0, format="%.2f")
 
-                with col_conv1:
-                    convenio_sel = st.selectbox(
-                        "Selecionar Convênio",
-                        ["Selecione"] + lista_convenios
-                    )
+            descricao = st.text_input("Descrição")
 
-                with col_conv2:
-                    novo_conv = st.text_input("Cadastrar Novo Convênio")
-
-                # salvar novo convênio
-                if novo_conv:
-                    try:
-                        supabase.table("convenios").insert({
-                            "nome": novo_conv.upper()
-                        }).execute()
-                        st.success("Convênio cadastrado")
-                    except:
-                        pass
-
-                # ==================================================
-                # PACIENTES DO DIA
-                # ==================================================
-                pacientes_dia = []
-
-                try:
-                    res_p = supabase.table("CONSULTAS") \
-                        .select("*") \
-                        .gte("data_hora", data_iso) \
-                        .execute()
-
-                    if res_p.data:
-                        df_p = pd.DataFrame(res_p.data)
-
-                        df_p['nome_full'] = (
-                            df_p['paciente_nome'].fillna('') + " " +
-                            df_p['paciente_sobrenome'].fillna('')
-                        )
-
-                        pacientes_dia = df_p['nome_full'].tolist()
-
-                except:
-                    pass
-
-                paciente_conv = st.selectbox(
-                    "Paciente (Convênio)",
-                    ["Selecione"] + pacientes_dia
-                )
-
-                if paciente_conv != "Selecione":
-                    descricao = f"CONVÊNIO - {convenio_sel} - {paciente_conv}"
-
-            else:
-                descricao = st.text_input("Descrição")
-
-            submitted = st.form_submit_button("💾 Registrar Lançamento")
+            submitted = st.form_submit_button("💾 Registrar")
 
             # ======================================================
             # PROCESSAMENTO
             # ======================================================
             if submitted:
 
-                if valor <= 0:
-                    st.error("⚠️ Informe valor válido")
+                if forma in ["PIX", "Dinheiro", "Cartão"] and valor <= 0:
+                    st.error("⚠️ Informe o valor")
 
-                elif forma == "Convênio" and (not convenio_sel or convenio_sel == "Selecione"):
-                    st.error("⚠️ Selecione o convênio")
-
-                elif forma == "Convênio" and "Selecione" in descricao:
-                    st.error("⚠️ Selecione o paciente")
+                elif forma == "Convênio" and faturado <= 0:
+                    st.error("⚠️ Informe o valor do convênio")
 
                 else:
                     try:
@@ -1458,8 +1414,10 @@ elif menu == "12. Caixa":
                         registro = {
                             "tipo": tipo,
                             "valor": float(valor),
+                            "faturado": float(faturado),
                             "forma_pagamento": forma,
                             "descricao": descricao.upper(),
+                            "paciente": paciente,
                             "unidade": unidade,
                             "data": data_iso,
                             "data_hora": hoje.isoformat()
@@ -1467,7 +1425,7 @@ elif menu == "12. Caixa":
 
                         supabase.table("caixa").insert(registro).execute()
 
-                        st.success("✅ Lançamento registrado com sucesso")
+                        st.success("✅ Lançado com sucesso")
 
                     except Exception as e:
                         st.error(f"❌ Erro: {e}")
@@ -1489,14 +1447,17 @@ elif menu == "12. Caixa":
                 df = pd.DataFrame(res.data)
 
                 entradas = df[df['tipo'] == "Entrada"]['valor'].sum()
+                faturado_total = df['faturado'].sum()
                 saidas = df[df['tipo'] == "Saída"]['valor'].sum()
+
                 saldo = entradas - saidas
 
-                c1, c2, c3 = st.columns(3)
+                c1, c2, c3, c4 = st.columns(4)
 
                 c1.metric("Entradas", f"R$ {entradas:,.2f}")
-                c2.metric("Saídas", f"R$ {saidas:,.2f}")
-                c3.metric("Saldo", f"R$ {saldo:,.2f}")
+                c2.metric("Faturado", f"R$ {faturado_total:,.2f}")
+                c3.metric("Saídas", f"R$ {saidas:,.2f}")
+                c4.metric("Saldo", f"R$ {saldo:,.2f}")
 
                 df['data_hora'] = pd.to_datetime(df['data_hora']).dt.strftime("%d/%m/%Y %H:%M")
 
@@ -1507,4 +1468,3 @@ elif menu == "12. Caixa":
 
         except Exception as e:
             st.error(f"Erro ao carregar caixa: {e}")
-
